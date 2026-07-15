@@ -31,13 +31,22 @@ import type { Mode } from './scale';
  * Where the archive lives.
  *
  * Production reads it from R2, never from Pages: Pages caps a single file at
- * 25 MiB and this is ~35 MB. R2 is already public at data.kreni.app, already
- * answers range requests, and already reflects CORS — verified 2026-07-15.
+ * 25 MiB and this is ~35 MB. R2 at data.kreni.app answers range requests and
+ * allows this origin — verified 2026-07-15 against the live object.
  *
- * Dev prefers a local copy so `yarn dev` works offline and doesn't hammer
- * production. That copy lives in `public/data/`, which is gitignored — and
- * vite.config.ts deletes any `.pmtiles` from `dist/`, so a stray local copy can
- * never ride along into a Pages deploy and break it.
+ * **Dev cannot use R2, and this is not a fallback — it is the only path.** The
+ * bucket's CORS is an allowlist over the kreni.app zone, not a wildcard:
+ * https://statistika.kreni.app and https://kreni.app get an ACAO header,
+ * http://localhost gets none and the fetch is blocked. So dev reads a local
+ * copy from `public/data/` (gitignored), which also keeps `yarn dev` offline
+ * and off production.
+ *
+ * The corollary is a real gap worth knowing: `yarn preview` is a *production*
+ * bundle served from localhost, so it resolves to R2 and is blocked — preview
+ * shows the map with no basemap under it. That is the tooling, not a bug.
+ *
+ * vite.config.ts deletes any `.pmtiles` from `dist/`, so the dev copy can never
+ * ride along into a Pages deploy and fail it on the size cap.
  */
 const R2_BASEMAP = 'https://data.kreni.app/basemap/zagreb.pmtiles';
 

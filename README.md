@@ -82,6 +82,12 @@ In production it is served from R2 at `data.kreni.app`, **not** from Pages —
 Pages caps a single file at 25 MiB. The size is storage, not bandwidth: a
 visitor downloads only the tiles they look at.
 
+The local copy is required rather than a convenience: R2's CORS is an allowlist
+over the `kreni.app` zone, so `localhost` is refused. Two consequences —
+`yarn dev` reads `public/data/zagreb.pmtiles`, and **`yarn preview` shows no
+basemap at all**, because it serves a production bundle (which resolves to R2)
+from localhost (which R2 blocks).
+
 The flavour is restyled from the site's ink tokens rather than used as shipped,
 and the rule it follows is that **hue is spent only on data**. Water is a
 neutral gray, never blue, because blue means *early* here and the Sava runs
