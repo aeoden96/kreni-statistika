@@ -1,0 +1,272 @@
+/* Chart chrome stays recessive; the data carries the colour. */
+:root {
+  --surface: #fcfcfb;
+  --plane: #f9f9f7;
+  --primary: #0b0b0b;
+  --secondary: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --border: rgba(11, 11, 11, 0.1);
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  --surface: #1a1a19;
+  --plane: #0d0d0d;
+  --primary: #ffffff;
+  --secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --border: rgba(255, 255, 255, 0.1);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--primary);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Tabular figures so numbers don't jitter as the slider scrubs. */
+  font-variant-numeric: tabular-nums;
+}
+
+#app {
+  display: grid;
+  grid-template-areas: 'head head' 'ctrl panel' 'map panel' 'tables tables';
+  grid-template-columns: 1fr 320px;
+  grid-template-rows: auto auto minmax(320px, 1fr) auto;
+  gap: 12px;
+  min-height: 100vh;
+  padding: 12px;
+}
+@media (max-width: 860px) {
+  #app {
+    grid-template-areas: 'head' 'ctrl' 'map' 'panel' 'tables';
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 60vh auto auto;
+    height: auto;
+  }
+}
+
+#headline {
+  grid-area: head;
+}
+h1 {
+  font-size: 22px;
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
+}
+.lede {
+  margin: 0 0 4px;
+  max-width: 70ch;
+  color: var(--secondary);
+}
+.lede strong {
+  color: var(--primary);
+}
+.note,
+.coverage {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 70ch;
+}
+
+.controls {
+  grid-area: ctrl;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.slider-row {
+  margin-top: 8px;
+}
+.slider-row label {
+  font-size: 12px;
+  color: var(--muted);
+}
+#hour {
+  flex: 1;
+  max-width: 460px;
+  accent-color: var(--secondary);
+}
+#hour-label {
+  font-weight: 600;
+  min-width: 5ch;
+}
+
+.group {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+button {
+  background: var(--surface);
+  color: var(--secondary);
+  border: 0;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.group button + button {
+  border-left: 1px solid var(--border);
+}
+button.on {
+  background: var(--primary);
+  color: var(--surface);
+}
+#play {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.legend .sw {
+  width: 18px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.legend .sw.ring {
+  background: transparent;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  width: 9px;
+  height: 9px;
+}
+.legend .sep {
+  width: 12px;
+}
+.legend .cap {
+  margin: 0 4px;
+}
+
+#map {
+  grid-area: map;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 320px;
+}
+
+#panel {
+  grid-area: panel;
+  position: relative;
+}
+#panel:empty {
+  display: none;
+}
+#panel h2 {
+  font-size: 16px;
+  margin: 0 0 2px;
+  padding-right: 24px;
+}
+#panel .sub {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+#panel svg {
+  overflow: visible;
+}
+#close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.error {
+  padding: 24px;
+  color: var(--secondary);
+  font-family: ui-monospace, monospace;
+  white-space: pre-wrap;
+}
+
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}
+
+/* Tables: the map's fallback, and the better answer to "which stops are worst". */
+#tables {
+  grid-area: tables;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  padding-top: 8px;
+}
+/* min-width:0 lets the grid item shrink; without it the nowrap table sets a
+   min-content floor and the last column is clipped off the page. */
+.board {
+  min-width: 0;
+}
+.board h3 {
+  font-size: 14px;
+  margin: 0 0 2px;
+}
+.board .scroll {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 8px 4px 0;
+  border-bottom: 1px solid var(--grid);
+  white-space: nowrap;
+}
+td {
+  padding: 5px 8px 5px 0;
+  border-bottom: 1px solid var(--grid);
+  color: var(--secondary);
+  white-space: nowrap;
+}
+td:nth-child(2) {
+  color: var(--primary);
+  white-space: normal;
+}
+.num {
+  text-align: right;
+}
+.rank {
+  color: var(--muted);
+  width: 2ch;
+}
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.tiny {
+  font-size: 10px;
+  color: var(--muted);
+}

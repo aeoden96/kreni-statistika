@@ -1,0 +1,10 @@
+node_modules
+dist
+.DS_Store
+*.local
+
+# Baked artifacts, injected at build time by kreni-core (see README)
+public/data/
+
+# TS incremental build info
+*.tsbuildinfo

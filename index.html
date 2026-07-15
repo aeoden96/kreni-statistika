@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="hr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Statistika — how punctual is ZET?</title>
+    <meta
+      name="description"
+      content="Typical deviation from schedule for every ZET stop, by hour and day. Built from historical GTFS-Realtime observations."
+    />
+  </head>
+  <body>
+    <div id="app">
+      <header id="headline"></header>
+      <div class="controls">
+        <div class="row">
+          <div class="group" role="group" aria-label="Day type">
+            <button data-mode="wd" class="on">Weekdays</button>
+            <button data-mode="we">Weekends</button>
+          </div>
+          <div class="group" role="group" aria-label="Vehicle type">
+            <button data-filter="all" class="on">All</button>
+            <button data-filter="tram">Tram</button>
+            <button data-filter="bus">Bus</button>
+          </div>
+          <button id="play">▶ Play day</button>
+        </div>
+        <div class="row slider-row">
+          <label for="hour">Hour</label>
+          <input id="hour" type="range" min="0" max="23" value="8" step="1" />
+          <output id="hour-label">08:00</output>
+        </div>
+        <div id="legend" class="legend"></div>
+        <p id="coverage" class="coverage"></p>
+      </div>
+      <div id="map"></div>
+      <aside id="panel"></aside>
+      <section id="tables"></section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
