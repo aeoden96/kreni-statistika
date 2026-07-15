@@ -183,6 +183,43 @@ button.on {
 #panel svg {
   overflow: visible;
 }
+
+/* Lines through the selected stop, and the profile of the one picked. */
+.lines-h {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chip {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--muted);
+}
+.chip.on {
+  background: var(--primary);
+  color: var(--surface);
+  border-color: var(--primary);
+}
+.route {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
 #close {
   position: absolute;
   top: 0;

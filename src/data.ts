@@ -101,6 +101,25 @@ export const loadStations = () => getJson<StopCollection>('stations.geojson');
 export const loadSummary = () => getJson<CitySummary>('city-summary.json');
 /** Lazy: only needed when drilling into a station's platforms. */
 export const loadStops = () => getJson<StopCollection>('stops.geojson');
+/** Lazy: route sequences carry no deviations, only the join keys into stops.geojson. */
+export const loadRoutes = () => getJson<import('./routes').RouteFile>('routes.json');
+
+/**
+ * The route view needs stops.geojson *and* routes.json — together ~650 KB gz,
+ * which is not worth spending on a first paint the map does not need. Fetch once,
+ * on the first drill-down, and share the promise so a fast double-click cannot
+ * start two downloads.
+ */
+let deepData: Promise<{ byStop: Map<string, StopProperties>; routes: import('./routes').RouteFile }> | null = null;
+export function loadRouteData() {
+  if (!deepData) {
+    deepData = Promise.all([loadStops(), loadRoutes()]).then(([stops, routes]) => ({
+      byStop: new Map(stops.features.map((f) => [String(f.id), f.properties])),
+      routes,
+    }));
+  }
+  return deepData;
+}
 
 /** Index into a 7x24 array. Sunday is 0 — the Worker's getDay() convention. */
 export const cellIndex = (dow: number, hour: number) => dow * 24 + hour;

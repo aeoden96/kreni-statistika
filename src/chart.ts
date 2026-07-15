@@ -12,6 +12,7 @@
 
 import { readCell, type DayMode, type StopProperties } from './data';
 import { DOMAIN_SECONDS, colorFor, describe, ink, type Mode } from './scale';
+import type { RouteEntry } from './routes';
 
 const H = 132;
 const BAR_W = 11;
@@ -53,5 +54,68 @@ export function barChart(props: StopProperties, mode: DayMode, theme: Mode, acti
       <text x="0" y="10" font-size="9" fill="${c.muted}">late</text>
       <text x="0" y="${H - 2}" font-size="9" fill="${c.muted}">early</text>
       ${[0, 6, 12, 18].map((h) => `<text x="${h * (BAR_W + GAP)}" y="${MID + 3}" font-size="8" fill="${c.muted}">${h}h</text>`).join('')}
+    </svg>`;
+}
+
+/**
+ * Deviation along a path, origin → terminus. The chart the map cannot draw.
+ *
+ * Dots, not bars, and a fitted line through them: position along the route is a
+ * *continuum*, and the question is whether the trend is real — which is a shape
+ * you read, not a number you're told. Where the fit is noise, the scatter shows
+ * it and the reader can overrule the label.
+ *
+ * Stops with no data are simply absent. Drawing them at zero would invent an
+ * on-time vehicle, which is the one lie this chart could tell.
+ */
+export function routeProfile(
+  route: RouteEntry,
+  byStop: Map<string, StopProperties>,
+  mode: DayMode,
+  theme: Mode,
+  hour: number,
+  highlight?: string,
+): string {
+  const c = ink(theme);
+  const w = 320;
+  const n = route.stops.length;
+  const px = (i: number) => 4 + (i / Math.max(1, n - 1)) * (w - 8);
+
+  const dots: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const props = byStop.get(route.stops[i]);
+    const v = props?.[mode]?.[hour];
+    if (v === null || v === undefined) continue;
+    const cy = MID - y(v);
+    const isHere = route.stops[i] === highlight;
+    dots.push(
+      `<circle cx="${px(i).toFixed(1)}" cy="${cy.toFixed(1)}" r="${isHere ? 5 : 3}"` +
+        ` fill="${colorFor(v, theme)}" stroke="${isHere ? c.primary : c.surface}" stroke-width="${isHere ? 2 : 1}">` +
+        `<title>${props?.name ?? route.stops[i]} — ${describe(v)}${route.exclusive[i] ? '' : ' (shared with other lines)'}</title></circle>`,
+    );
+  }
+
+  // The fitted line, drawn only where it is trustworthy. A trend line over
+  // scatter is an assertion the data does not support.
+  const slope = route[mode].slope[hour];
+  const offset = route[mode].offset[hour];
+  const r2 = route[mode].r2[hour];
+  let trend = '';
+  if (slope !== null && offset !== null && r2 !== null && r2 >= 0.5) {
+    const y0 = MID - y(offset);
+    const y1 = MID - y(offset + slope * (n - 1));
+    trend = `<line x1="${px(0)}" y1="${y0.toFixed(1)}" x2="${px(n - 1)}" y2="${y1.toFixed(1)}"
+      stroke="${c.secondary}" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.8"/>`;
+  }
+
+  return `
+    <svg viewBox="0 0 ${w} ${H}" width="100%" height="${H}" role="img"
+         aria-label="Typical deviation along the route, origin on the left. Dots below the line are early, above are late.">
+      <line x1="0" y1="${MID}" x2="${w}" y2="${MID}" stroke="${c.grid}" stroke-width="1"/>
+      ${trend}
+      ${dots.join('')}
+      <text x="0" y="10" font-size="9" fill="${c.muted}">late</text>
+      <text x="0" y="${H - 2}" font-size="9" fill="${c.muted}">early</text>
+      <text x="${w}" y="${H - 2}" font-size="9" fill="${c.muted}" text-anchor="end">terminus →</text>
     </svg>`;
 }
