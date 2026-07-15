@@ -12,7 +12,9 @@
     "tsc": "tsc -b --noEmit"
   },
   "dependencies": {
-    "maplibre-gl": "^5.6.0"
+    "@protomaps/basemaps": "^5.7.2",
+    "maplibre-gl": "^5.6.0",
+    "pmtiles": "^4.4.1"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",

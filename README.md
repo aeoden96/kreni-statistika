@@ -67,9 +67,30 @@ Expected in `public/data/`:
 In production, kreni-core's deploy workflow bakes and injects these, mirroring
 how it feeds the kreni.app frontend.
 
+## The basemap
+
+A single Protomaps `.pmtiles` archive, read over HTTP range requests — no tile
+server, which is what keeps this site static. `VITE_BASEMAP_URL` points at it,
+defaulting to `/data/zagreb.pmtiles` for local work:
+
+```bash
+# from kreni-core: yarn basemap  →  dist/basemap/zagreb.pmtiles (~35 MB)
+cp ../kreni-core/dist/basemap/zagreb.pmtiles public/data/
+```
+
+In production it is served from R2 at `data.kreni.app`, **not** from Pages —
+Pages caps a single file at 25 MiB. The size is storage, not bandwidth: a
+visitor downloads only the tiles they look at.
+
+The flavour is restyled from the site's ink tokens rather than used as shipped,
+and the rule it follows is that **hue is spent only on data**. Water is a
+neutral gray, never blue, because blue means *early* here and the Sava runs
+straight through the city; Protomaps' POI palette — which includes a `blue` and
+a `red` — is flattened to muted ink for the same reason. See `src/basemap.ts`.
+
 ## Stack
 
-Vite + TypeScript + MapLibre GL. No framework, no runtime backend.
+Vite + TypeScript + MapLibre GL + PMTiles. No framework, no runtime backend.
 
 The map needs WebGL; where it is unavailable the rankings render as tables
 instead, which are also the accessible path to the same numbers.

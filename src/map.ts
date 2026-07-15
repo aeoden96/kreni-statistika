@@ -13,12 +13,32 @@
  */
 
 import maplibregl, { type Map as MLMap, type MapGeoJSONFeature } from 'maplibre-gl';
+import { Protocol } from 'pmtiles';
 
+import { basemapLayers, basemapUrl, BASEMAP_ATTRIBUTION, SOURCE as BASEMAP } from './basemap';
 import { readCell, type DayMode, type StopCollection, type StopFeature } from './data';
 import { colorExpression, ink, type Mode } from './scale';
 
 const SOURCE = 'stations';
 const ZAGREB: [number, number] = [15.9819, 45.815];
+
+/**
+ * Bounds of the baked basemap extract, padded around every ZET stop — including
+ * the suburban ones 27 km out. Panning past this shows blank tiles, so the map
+ * is fenced to what actually exists.
+ */
+const BOUNDS: [number, number, number, number] = [15.743, 45.547, 16.259, 45.966];
+
+/**
+ * `pmtiles://` teaches MapLibre to range-request a single archive instead of
+ * hitting a tile server. Registered once per page, not per map.
+ */
+let protocolRegistered = false;
+function registerProtocol(): void {
+  if (protocolRegistered) return;
+  maplibregl.addProtocol('pmtiles', new Protocol().tile);
+  protocolRegistered = true;
+}
 
 /** Values the map reads per feature, recomputed when hour/day changes. */
 interface RenderProps {
@@ -41,15 +61,32 @@ export class DelayMap {
     this.mode = mode;
     this.onSelect = onSelect;
     const c = ink(mode);
+    registerProtocol();
     this.map = new maplibregl.Map({
-      // No basemap yet — a blank canvas keeps the delay colours unambiguous
-      // while the data view is being validated. PMTiles lands next; it must be
-      // hosted on R2, since Cloudflare Pages caps a single file at 25 MiB.
-      style: { layers: [{ id: 'bg', paint: { 'background-color': c.surface }, type: 'background' }], sources: {}, version: 8 },
+      style: {
+        glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+        layers: [{ id: 'bg', paint: { 'background-color': c.surface }, type: 'background' }, ...basemapLayers(mode)],
+        sources: {
+          [BASEMAP]: {
+            attribution: BASEMAP_ATTRIBUTION,
+            type: 'vector',
+            url: `pmtiles://${basemapUrl()}`,
+          },
+        },
+        version: 8,
+      },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       container,
       center: ZAGREB,
       zoom: 11,
+      // The archive stops at z15; MapLibre overzooms past it, so street-level
+      // detail still resolves rather than hitting a wall.
+      maxZoom: 17,
+      minZoom: 9,
+      maxBounds: [
+        [BOUNDS[0], BOUNDS[1]],
+        [BOUNDS[2], BOUNDS[3]],
+      ],
       attributionControl: false,
     });
     this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
