@@ -195,5 +195,10 @@ export class DelayMap {
   }
 }
 
-const matchesFilter = (routeTypes: number[], filter: FilterMode): boolean =>
+/**
+ * Exported so the boards filter exactly as the map does. Two copies of this rule
+ * would eventually disagree, and a table contradicting the dots beside it is
+ * worse than either alone.
+ */
+export const matchesFilter = (routeTypes: number[], filter: FilterMode): boolean =>
   filter === 'all' ? true : filter === 'tram' ? routeTypes.includes(0) : !routeTypes.includes(0);

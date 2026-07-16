@@ -10,7 +10,7 @@
  * carries the meaning for anyone who cannot separate the hues.
  */
 
-import { readCell, type DayMode, type StopProperties } from './data';
+import { readCell, type CityCurve, type DayMode, type StopProperties } from './data';
 import { DOMAIN_SECONDS, colorFor, describe, ink, type Mode } from './scale';
 import type { RouteEntry } from './routes';
 
@@ -53,6 +53,52 @@ export function barChart(props: StopProperties, mode: DayMode, theme: Mode, acti
       ${bars.join('')}
       <text x="0" y="10" font-size="9" fill="${c.muted}">late</text>
       <text x="0" y="${H - 2}" font-size="9" fill="${c.muted}">early</text>
+      ${[0, 6, 12, 18].map((h) => `<text x="${h * (BAR_W + GAP)}" y="${MID + 3}" font-size="8" fill="${c.muted}">${h}h</text>`).join('')}
+    </svg>`;
+}
+
+/**
+ * The city's day: one bar per hour, departure-weighted.
+ *
+ * This is the site's actual argument, and until it existed the page could not
+ * make it. The network is ~2 min ahead of schedule overnight and ~2 min late at
+ * 16:00; averaging those gives "26 s early", which is true of the week and
+ * describes no journey anyone takes. One glance at this shape and the headline
+ * is unnecessary.
+ *
+ * Clickable: the chart is also the hour control, because having read "16:00 is
+ * the worst" the obvious next move is to go there.
+ */
+export function cityCurve(curve: CityCurve, theme: Mode, activeHour: number): string {
+  const c = ink(theme);
+  const w = 24 * (BAR_W + GAP);
+  const values = curve.mean.filter((v): v is number => v !== null);
+  // Its own scale, like the route profile: the city curve peaks near +2 min and
+  // the map's ±5 min clamp would squash the whole day into a flat smear.
+  const span = Math.max(60, ...values.map(Math.abs));
+  const scale = (v: number) => (v / span) * (H / 2 - 12);
+
+  const bars = curve.mean.map((v, hour) => {
+    const x = hour * (BAR_W + GAP);
+    if (v === null) return `<rect x="${x}" y="${MID - 0.5}" width="${BAR_W}" height="1" fill="${c.muted}" opacity="0.45"/>`;
+    const dy = scale(v);
+    const top = v > 0 ? MID - dy : MID;
+    const h = Math.max(2, Math.abs(dy));
+    return (
+      `<rect class="hbar" data-hour="${hour}" x="${x}" y="${top}" width="${BAR_W}" height="${h}" rx="2"` +
+      ` fill="${colorFor(v, theme)}"${hour === activeHour ? ` stroke="${c.primary}" stroke-width="1.5"` : ''}>` +
+      `<title>${String(hour).padStart(2, '0')}:00 — ${describe(v)} · ${curve.late[hour]}% of departures late</title></rect>`
+    );
+  });
+
+  const cap = `${(span / 60).toFixed(1)} min`;
+  return `
+    <svg viewBox="0 0 ${w} ${H}" width="100%" height="${H}" role="img"
+         aria-label="Typical deviation across the whole network by hour. Bars below the line are early, above are late.">
+      <line x1="0" y1="${MID}" x2="${w}" y2="${MID}" stroke="${c.grid}" stroke-width="1"/>
+      ${bars.join('')}
+      <text x="0" y="10" font-size="9" fill="${c.muted}">+${cap} late</text>
+      <text x="0" y="${H - 2}" font-size="9" fill="${c.muted}">−${cap} early</text>
       ${[0, 6, 12, 18].map((h) => `<text x="${h * (BAR_W + GAP)}" y="${MID + 3}" font-size="8" fill="${c.muted}">${h}h</text>`).join('')}
     </svg>`;
 }

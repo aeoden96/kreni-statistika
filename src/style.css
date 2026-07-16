@@ -307,3 +307,32 @@ td:nth-child(2) {
   font-size: 10px;
   color: var(--muted);
 }
+
+/* The city's day — the site's actual argument, so it sits with the headline. */
+.curve {
+  margin-top: 10px;
+  max-width: 460px;
+}
+.curve svg {
+  overflow: visible;
+}
+.hbar {
+  cursor: pointer;
+}
+.hbar:hover {
+  opacity: 0.75;
+}
+.mark {
+  color: var(--muted);
+}
+/* Board rows are a way into the map, so they must look clickable. */
+tr.pick {
+  cursor: pointer;
+}
+tr.pick:hover td {
+  color: var(--primary);
+}
+.board-foot {
+  grid-column: 1 / -1;
+  max-width: 90ch;
+}

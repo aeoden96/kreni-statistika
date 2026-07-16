@@ -33,6 +33,15 @@ export interface StopProperties {
   wd: (Seconds | null)[];
   /** 24 weekend means. */
   we: (Seconds | null)[];
+  /**
+   * stations.geojson only: observations behind each `wd`/`we` mean.
+   *
+   * A mean without its weight cannot be ranked honestly — a cell scraping past
+   * the sample threshold and one built from 500 observations look identical. Not
+   * shipped for platforms, where nothing reads them.
+   */
+  wdCount?: number[];
+  weCount?: number[];
   /** stations.geojson only: child platform ids. */
   platforms?: string[];
   /** stops.geojson only: parent station id. */
@@ -72,8 +81,24 @@ export interface CitySummary {
     netMeanSeconds: number | null;
   };
   city: { delay: (Seconds | null)[]; departures: number[]; samples: number[] };
+  /**
+   * The day's shape, departure-weighted, per hour. The argument the site leads
+   * with: the network is ~2 min early overnight and ~2 min late at 16:00, and
+   * the whole-week average describes no journey anyone makes.
+   */
+  cityByHour: Record<DayMode, CityCurve>;
   leaderboards: Record<string, LeaderboardRow[]>;
   source: { bytes: number; lastDecay: string | null; lastUpdated: string | null; totalSamples: number | null };
+}
+
+/** Per-hour, departure-weighted. `mean` is null where no hour had enough samples. */
+export interface CityCurve {
+  departures: number[];
+  early: number[];
+  late: number[];
+  mean: (Seconds | null)[];
+  onTime: number[];
+  stops: number[];
 }
 
 export interface LeaderboardRow {
@@ -105,20 +130,20 @@ export const loadStops = () => getJson<StopCollection>('stops.geojson');
 export const loadRoutes = () => getJson<import('./routes').RouteFile>('routes.json');
 
 /**
- * The route view needs stops.geojson *and* routes.json — together ~650 KB gz,
- * which is not worth spending on a first paint the map does not need. Fetch once,
- * on the first drill-down, and share the promise so a fast double-click cannot
- * start two downloads.
+ * Platform detail, for drawing a route's profile. 535 KB gz and needed only once
+ * someone drills into a stop, so it is fetched then — the promise is shared so a
+ * fast double-click cannot start two downloads.
+ *
+ * routes.json is NOT lazy: at 121 KB it powers the "lines furthest off schedule"
+ * board, which is a headline answer to "is my line bad?" and cannot wait for the
+ * reader to click something first.
  */
-let deepData: Promise<{ byStop: Map<string, StopProperties>; routes: import('./routes').RouteFile }> | null = null;
-export function loadRouteData() {
-  if (!deepData) {
-    deepData = Promise.all([loadStops(), loadRoutes()]).then(([stops, routes]) => ({
-      byStop: new Map(stops.features.map((f) => [String(f.id), f.properties])),
-      routes,
-    }));
+let platformData: Promise<Map<string, StopProperties>> | null = null;
+export function loadPlatforms() {
+  if (!platformData) {
+    platformData = loadStops().then((stops) => new Map(stops.features.map((f) => [String(f.id), f.properties])));
   }
-  return deepData;
+  return platformData;
 }
 
 /** Index into a 7x24 array. Sunday is 0 — the Worker's getDay() convention. */

@@ -12,9 +12,11 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import { barChart, routeProfile } from './chart';
+import { extremes } from './boards';
+import { barChart, cityCurve, routeProfile } from './chart';
 import {
-  loadRouteData,
+  loadPlatforms,
+  loadRoutes,
   loadStations,
   loadSummary,
   readCell,
@@ -24,7 +26,7 @@ import {
   type StopFeature,
   type StopProperties,
 } from './data';
-import { DelayMap, type FilterMode } from './map';
+import { DelayMap, matchesFilter, type FilterMode } from './map';
 import { diagnose, indexByStop, routeLabel, EXCLUSIVE_IS_LINE, type RouteEntry, type RouteFile } from './routes';
 import { tableView } from './table';
 import { colorFor, describe, stops, type Mode } from './scale';
@@ -78,9 +80,19 @@ function writeUrl() {
   history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
 }
 
-/** Populated on the first drill-down — see loadRouteData. */
-let deep: { byStop: Map<string, StopProperties>; routes: RouteFile } | null = null;
+/** routes.json is loaded up front — it powers the line board. */
+let routeFile: RouteFile | null = null;
 let routesAtStop: Map<string, RouteEntry[]> = new Map();
+/** Platform detail arrives on the first drill-down, for the route profiles. */
+let platforms: Map<string, StopProperties> | null = null;
+
+/**
+ * Re-render everything for the current hour/day/filter. Assigned by main().
+ *
+ * The whole page describes one hour now — map, boards and headline — so there is
+ * one repaint, not three that can disagree with each other.
+ */
+let redraw: () => void = () => {};
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -89,16 +101,19 @@ async function main() {
   readUrl();
   let stations: StopCollection;
   let summary: CitySummary;
+  let loadedRoutes: RouteFile | null = null;
   try {
-    [stations, summary] = await Promise.all([loadStations(), loadSummary()]);
+    // routes.json rides along with the first paint: the line board is a headline
+    // answer, not a drill-down, so it cannot wait for a click.
+    [stations, summary, loadedRoutes] = await Promise.all([loadStations(), loadSummary(), loadRoutes().catch(() => null)]);
+    routeFile = loadedRoutes;
+    if (routeFile) routesAtStop = indexByStop(routeFile);
   } catch (err) {
     $('#app').innerHTML = `<div class="error"><strong>No data.</strong><br>${(err as Error).message}</div>`;
     return;
   }
 
-  renderHeadline(summary);
   renderLegend();
-  $('#tables').innerHTML = tableView(summary, theme);
 
   // MapLibre needs WebGL. Where it is unavailable (old hardware, blocked
   // drivers, some headless/VM setups) the map must say so rather than leave a
@@ -118,6 +133,8 @@ async function main() {
 
   const byId = new Map(stations.features.map((f) => [String(f.id), f as StopFeature]));
 
+  const shown = () => stations.features.filter((f) => matchesFilter(f.properties.routeTypes, state.filter)) as StopFeature[];
+
   const draw = () => {
     map.render(state.mode, state.hour, state.filter);
     const c = map.counts(state.mode, state.hour, state.filter);
@@ -128,22 +145,36 @@ async function main() {
     // than the data earns.
     $('#coverage').textContent =
       `${c.value} stations shown · ${c.lowData} too few samples · ${c.noService} no service scheduled`;
+    // Headline, boards and map all describe the SAME hour. That coherence is the
+    // point: the page used to show a map of 08:00 beside tables of the whole week
+    // beside a headline about the whole month.
+    renderHeadline(summary);
+    $('#tables').innerHTML = tableView(shown(), routeFile, state.mode, state.hour, theme, state.filter);
+    for (const row of document.querySelectorAll<HTMLTableRowElement>('#tables tr[data-stop]')) {
+      row.addEventListener('click', () => {
+        const id = row.dataset.stop;
+        if (!id) return;
+        void select(id);
+        const f = byId.get(id);
+        if (f) map.flyTo(f);
+      });
+    }
     if (state.selected) renderPanel(byId.get(state.selected));
   };
+  redraw = draw;
 
   const select = async (id: string, keepRoute = false) => {
     state.selected = id;
     if (!keepRoute) state.route = null;
     writeUrl();
     renderPanel(byId.get(id));
-    // The route files are fetched on first drill-down, so the panel renders now
-    // and gains its lines a moment later rather than blocking on ~650 KB.
-    if (!deep) {
+    // Platform detail is 535 KB and only the profile needs it, so the panel
+    // renders now and gains its charts a moment later rather than blocking.
+    if (!platforms) {
       try {
-        deep = await loadRouteData();
-        routesAtStop = indexByStop(deep.routes);
+        platforms = await loadPlatforms();
       } catch {
-        return; // The panel is still useful without lines; say nothing.
+        return; // The panel is still useful without profiles; say nothing.
       }
     }
     if (state.selected === id) renderPanel(byId.get(id));
@@ -205,20 +236,55 @@ async function main() {
   }
 }
 
+/**
+ * The headline.
+ *
+ * It used to lead with "57.1% of departures run early", which is an average over
+ * a bimodal day and the fastest way to lose a reader: someone who looks up their
+ * own 16:00 bus finds it 17 minutes late and concludes the site is wrong. It also
+ * asserted "arrive on time and it has already gone", which the feed cannot
+ * support — ZET stamps one delay per stop into both the arrival and departure
+ * fields (208 of 210 identical), so "arrived early and is waiting" and "left
+ * early" are indistinguishable in this data.
+ *
+ * So it leads with the shape instead, which is defensible, matches what riders
+ * feel, and is the more interesting claim anyway.
+ */
 function renderHeadline(s: CitySummary) {
-  const d = s.headline.byDepartureShare;
-  // Lead with the finding, not a vanity number: the network runs early.
+  const curve = s.cityByHour[state.mode];
+  const { early, late } = extremes(curve);
+  const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
+  const peakLate = curve.mean[late] ?? 0;
+  const peakEarly = curve.mean[early] ?? 0;
+
   $('#headline').innerHTML = `
-    <h1>How punctual is ZET?</h1>
-    <p class="lede">Weighted by scheduled departures, <strong>${d.early}% of departures run early</strong>,
-      ${d.onTime}% on time and ${d.late}% late. Typical early departure:
-      <strong>${describe(s.headline.meanEarlySeconds ?? 0)}</strong>; typical late one:
-      <strong>${describe(s.headline.meanLateSeconds ?? 0)}</strong>.</p>
-    <p class="note">An early tram is not a bonus — arrive on time and it has already gone.
-      Network mean ${s.headline.netMeanSeconds} s (negative = early).
+    <h1>ZET runs late when you need it, and early when you don't</h1>
+    <p class="lede">It depends entirely on <strong>when</strong> you travel. At <strong>${hh(late)}</strong> the network
+      is typically <strong>${describe(peakLate)}</strong> and <strong>${curve.late[late]}% of departures run late</strong>.
+      By <strong>${hh(early)}</strong> it is <strong>${describe(peakEarly)}</strong>, with ${curve.early[early]}% running ahead
+      of schedule.</p>
+    <p class="note">The whole-week average — ${plainDeviation(s.headline.netMeanSeconds ?? 0)} — describes no journey
+      anyone actually makes. Running ahead of schedule is not a bonus, but this data cannot tell you whether an early
+      vehicle waits at the stop or leaves without you: ZET's feed reports one deviation per stop, not separate
+      arrival and departure times.
       Based on ${(s.source.totalSamples ?? 0).toLocaleString('en')} observations across
       ${s.coverage.stationsMapped.toLocaleString('en')} stations; schedule from ZET feed
-      ${s.gtfs.feedVersion}, reference week ${Object.values(s.gtfs.referenceWeek).sort()[0]}.</p>`;
+      ${s.gtfs.feedVersion}, reference week ${Object.values(s.gtfs.referenceWeek).sort()[0]}.</p>
+    <div class="curve">
+      ${cityCurve(curve, theme, state.hour)}
+      <p class="note tiny">Typical deviation across the whole network, ${state.mode === 'wd' ? 'weekdays' : 'weekends'},
+        weighted by scheduled departures. Click an hour to jump to it.</p>
+    </div>`;
+
+  for (const el of document.querySelectorAll<SVGRectElement>('.hbar')) {
+    el.addEventListener('click', () => {
+      const h = Number(el.dataset.hour);
+      if (!Number.isInteger(h)) return;
+      state.hour = h;
+      $<HTMLInputElement>('#hour').value = String(h);
+      redraw();
+    });
+  }
 }
 
 /** Legend is always present: identity must never be colour-alone. */
@@ -274,7 +340,7 @@ function renderPanel(f: StopFeature | undefined) {
  * a competing headline.
  */
 function renderLines(f: StopFeature): string {
-  if (!deep) return '';
+  if (!routeFile) return '';
   const platforms = f.properties.platforms ?? [String(f.id)];
   const seen = new Set<string>();
   const lines: RouteEntry[] = [];
@@ -312,9 +378,9 @@ function renderLines(f: StopFeature): string {
     ${active ? renderRoute(active, platforms) : `<p class="note">Pick a line to see what its whole path does at this hour.</p>`}`;
 }
 
-function renderRoute(r: RouteEntry, platforms: string[]): string {
+function renderRoute(r: RouteEntry, stationPlatforms: string[]): string {
   const d = diagnose(r, state.mode, state.hour);
-  const here = r.stops.find((s) => platforms.includes(s));
+  const here = r.stops.find((s) => stationPlatforms.includes(s));
   const headway = r[state.mode === 'wd' ? 'wdHeadway' : 'weHeadway'][state.hour];
   const mins = (s: number) => `${(Math.abs(s) / 60).toFixed(1)} min`;
 
@@ -358,7 +424,7 @@ function renderRoute(r: RouteEntry, platforms: string[]): string {
   return `
     <div class="route">
       <p class="sub">${escapeHtml(routeLabel(r))} · ${r.stops.length} stops${headway ? ` · about every ${headway} min at this hour` : ''}</p>
-      ${routeProfile(r, deep!.byStop, state.mode, theme, state.hour, here)}
+      ${platforms ? routeProfile(r, platforms, state.mode, theme, state.hour, here) : '<p class="note tiny">Loading stop detail…</p>'}
       <p class="note">${verdict}</p>
       <p class="note tiny">${scope}${r.patternShare < 80 ? ` Only ${r.patternShare}% of its trips follow this exact stop pattern.` : ''}</p>
     </div>`;
@@ -367,6 +433,16 @@ function renderRoute(r: RouteEntry, platforms: string[]): string {
 const escapeHtml = (s: string) => s.replace(/[<>&]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] ?? c);
 
 const truncate = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1)}…`);
+
+/**
+ * "26 s early", not describe()'s "on time (-26 s)". The deadband wrapper reads
+ * right on a chart label and clumsy mid-sentence.
+ */
+const plainDeviation = (v: number) => {
+  const abs = Math.abs(v);
+  const unit = abs >= 90 ? `${(abs / 60).toFixed(1)} min` : `${Math.round(abs)} s`;
+  return `${unit} ${v < 0 ? 'early' : 'late'}`;
+};
 
 void maplibregl;
 main();
