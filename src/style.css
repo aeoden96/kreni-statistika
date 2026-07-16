@@ -7,6 +7,15 @@
   --muted: #898781;
   --grid: #e1e0d9;
   --border: rgba(11, 11, 11, 0.1);
+  --hairline: rgba(11, 11, 11, 0.06);
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.04);
+  --r: 12px;
+  /* One vertical rhythm for the whole page: sections, cards and stacks all
+     measure from these, so nothing is spaced by eye. */
+  --gap: 12px;
+  --pad: clamp(16px, 4vw, 32px);
+  --band: clamp(36px, 6vw, 68px);
+  --max: 1240px;
   color-scheme: light;
 }
 :root[data-theme='dark'] {
@@ -17,6 +26,8 @@
   --muted: #898781;
   --grid: #2c2c2a;
   --border: rgba(255, 255, 255, 0.1);
+  --hairline: rgba(255, 255, 255, 0.06);
+  --shadow: none;
   color-scheme: dark;
 }
 
@@ -27,55 +38,163 @@ body {
   margin: 0;
   background: var(--plane);
   color: var(--primary);
-  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   /* Tabular figures so numbers don't jitter as the slider scrubs. */
   font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
-#app {
-  display: grid;
-  grid-template-areas: 'head head' 'ctrl panel' 'map panel' 'tables tables';
-  grid-template-columns: 1fr 320px;
-  grid-template-rows: auto auto minmax(320px, 1fr) auto;
-  gap: 12px;
-  min-height: 100vh;
-  padding: 12px;
+/* One measure for every band on the page — hero, main and footer align. */
+.wrap {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding-inline: var(--pad);
+  width: 100%;
 }
-@media (max-width: 860px) {
-  #app {
-    grid-template-areas: 'head' 'ctrl' 'map' 'panel' 'tables';
+
+/* ── Hero ───────────────────────────────────────────────────────────────── */
+
+/* Raised off the page plane and given room to breathe: this is the argument,
+   and it used to be crammed into a dashboard cell above the controls. */
+.hero {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding-block: var(--band);
+}
+.eyebrow {
+  margin: 0 0 20px;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Claim on the left, evidence on the right. The curve is not decoration — it is
+   the headline's proof, so it sits beside the sentence rather than below it. */
+#headline {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 56px);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  #headline {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto 60vh auto auto;
-    height: auto;
+    gap: 28px;
   }
 }
 
-#headline {
-  grid-area: head;
-}
 h1 {
-  font-size: 22px;
-  margin: 0 0 4px;
-  letter-spacing: -0.01em;
+  /* Fluid, and capped at a line length that keeps the claim to two lines. */
+  font-size: clamp(28px, 4.2vw, 44px);
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  margin: 0 0 16px;
+  max-width: 18ch;
+  text-wrap: balance;
 }
 .lede {
-  margin: 0 0 4px;
-  max-width: 70ch;
+  margin: 0;
+  max-width: 54ch;
+  font-size: clamp(15px, 1.4vw, 17px);
   color: var(--secondary);
+  text-wrap: pretty;
 }
 .lede strong {
   color: var(--primary);
+  font-weight: 600;
+}
+
+/* The three numbers the lede rests on, pulled out so they survive skimming.
+   Spans the full hero: squeezed into the text column they wrapped to three
+   lines each, which is the opposite of a number you can glance at. */
+.stats {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 8px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.stat {
+  background: var(--surface);
+  padding: 14px 18px;
+}
+.stat .k {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+.stat .v {
+  display: block;
+  font-size: clamp(17px, 2vw, 21px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.stat .s {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+@media (max-width: 460px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Sections ───────────────────────────────────────────────────────────── */
+
+main {
+  padding-block: var(--band) calc(var(--band) / 1.5);
+}
+.sec + .sec {
+  margin-top: var(--band);
+}
+.sec-head {
+  margin-bottom: 16px;
+}
+.sec-head h2 {
+  font-size: 19px;
+  letter-spacing: -0.015em;
+  margin: 0 0 4px;
 }
 .note,
 .coverage {
   margin: 4px 0 0;
   font-size: 12px;
   color: var(--muted);
-  max-width: 70ch;
+  max-width: 74ch;
+}
+.sec-head .note {
+  margin-top: 0;
+}
+.tiny {
+  font-size: 10px;
+  color: var(--muted);
 }
 
+/* ── Controls ───────────────────────────────────────────────────────────── */
+
+/* Sticks to the top: the hour is the page's main verb, and scrolling to the
+   rankings must not put it out of reach. */
 .controls {
-  grid-area: ctrl;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+  margin-bottom: var(--gap);
 }
 .row {
   display: flex;
@@ -83,21 +202,33 @@ h1 {
   gap: 8px;
   flex-wrap: wrap;
 }
-.slider-row {
+.meta-row {
   margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+  justify-content: space-between;
+  gap: 12px;
 }
-.slider-row label {
-  font-size: 12px;
-  color: var(--muted);
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 220px;
 }
 #hour {
   flex: 1;
-  max-width: 460px;
-  accent-color: var(--secondary);
+  min-width: 140px;
+  max-width: 420px;
+  accent-color: var(--primary);
 }
 #hour-label {
   font-weight: 600;
   min-width: 5ch;
+  font-size: 14px;
+}
+.coverage {
+  margin: 0;
 }
 
 .group {
@@ -114,11 +245,16 @@ button {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+button:hover {
+  color: var(--primary);
 }
 .group button + button {
   border-left: 1px solid var(--border);
 }
-button.on {
+button.on,
+button.on:hover {
   background: var(--primary);
   color: var(--surface);
 }
@@ -126,12 +262,16 @@ button.on {
   border: 1px solid var(--border);
   border-radius: 8px;
 }
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
 .legend {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 10px;
   font-size: 12px;
   color: var(--muted);
 }
@@ -155,17 +295,43 @@ button.on {
   margin: 0 4px;
 }
 
+/* ── Map + panel ────────────────────────────────────────────────────────── */
+
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--gap);
+  align-items: stretch;
+}
+/* With nothing selected the panel is empty, and a 340px column of nothing
+   beside the map is just a map that got smaller for no reason. */
+.stage:has(#panel:empty) {
+  grid-template-columns: 1fr;
+}
+@media (max-width: 900px) {
+  .stage {
+    grid-template-columns: 1fr;
+  }
+}
+
 #map {
-  grid-area: map;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r);
   overflow: hidden;
-  min-height: 320px;
+  min-height: min(62vh, 560px);
+  box-shadow: var(--shadow);
 }
 
 #panel {
-  grid-area: panel;
   position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  /* Its own scroll: a long line list must not stretch the map beside it. */
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
 }
 #panel:empty {
   display: none;
@@ -174,23 +340,29 @@ button.on {
   font-size: 16px;
   margin: 0 0 2px;
   padding-right: 24px;
+  letter-spacing: -0.01em;
 }
 #panel .sub {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-size: 12px;
   color: var(--muted);
 }
 #panel svg {
   overflow: visible;
 }
+@media (max-width: 900px) {
+  #panel {
+    max-height: none;
+  }
+}
 
 /* Lines through the selected stop, and the profile of the one picked. */
 .lines-h {
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.07em;
   color: var(--muted);
-  margin: 14px 0 6px;
+  margin: 16px 0 8px;
 }
 .chips {
   display: flex;
@@ -216,18 +388,19 @@ button.on {
   border-color: var(--primary);
 }
 .route {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid var(--border);
 }
 #close {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 8px;
+  right: 8px;
   background: transparent;
   font-size: 18px;
   line-height: 1;
   padding: 2px 6px;
+  color: var(--muted);
 }
 
 .error {
@@ -241,26 +414,46 @@ button.on {
   font-size: 10px;
 }
 
-/* Tables: the map's fallback, and the better answer to "which stops are worst". */
+/* ── Rankings ───────────────────────────────────────────────────────────── */
+
+/* One or two columns, never three.
+   auto-fit is wrong for exactly four boards: at three across the fourth orphans
+   on its own row, and at four across the tracks get narrow enough to wrap stop
+   names onto two lines and clip the last column. Two columns fits the longest
+   row ("Kobiljak-trgovina · 16.4 min late · 35") on one line at every desktop
+   width, and pairs the boards 2x2. */
 #tables {
-  grid-area: tables;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  padding-top: 8px;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+  align-items: start;
+}
+@media (min-width: 680px) {
+  #tables {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 /* min-width:0 lets the grid item shrink; without it the nowrap table sets a
    min-content floor and the last column is clipped off the page. */
 .board {
   min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 14px;
 }
 .board h3 {
   font-size: 14px;
   margin: 0 0 2px;
+  letter-spacing: -0.01em;
+}
+.board .note {
+  font-size: 11px;
 }
 .board .scroll {
   overflow-x: auto;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 table {
   border-collapse: collapse;
@@ -270,19 +463,23 @@ table {
 th {
   text-align: left;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0 8px 4px 0;
+  letter-spacing: 0.06em;
+  padding: 0 8px 6px 0;
   border-bottom: 1px solid var(--grid);
   white-space: nowrap;
 }
 td {
-  padding: 5px 8px 5px 0;
-  border-bottom: 1px solid var(--grid);
+  padding: 6px 8px 6px 0;
+  border-bottom: 1px solid var(--hairline);
   color: var(--secondary);
   white-space: nowrap;
+}
+tbody tr:last-child td {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 td:nth-child(2) {
   color: var(--primary);
@@ -294,6 +491,7 @@ td:nth-child(2) {
 .rank {
   color: var(--muted);
   width: 2ch;
+  font-size: 11px;
 }
 .dot {
   display: inline-block;
@@ -303,28 +501,6 @@ td:nth-child(2) {
   margin-right: 6px;
   vertical-align: middle;
 }
-.tiny {
-  font-size: 10px;
-  color: var(--muted);
-}
-
-/* The city's day — the site's actual argument, so it sits with the headline. */
-.curve {
-  margin-top: 10px;
-  max-width: 460px;
-}
-.curve svg {
-  overflow: visible;
-}
-.hbar {
-  cursor: pointer;
-}
-.hbar:hover {
-  opacity: 0.75;
-}
-.mark {
-  color: var(--muted);
-}
 /* Board rows are a way into the map, so they must look clickable. */
 tr.pick {
   cursor: pointer;
@@ -332,7 +508,68 @@ tr.pick {
 tr.pick:hover td {
   color: var(--primary);
 }
+tr.pick:hover td:first-child {
+  color: var(--secondary);
+}
+.mark {
+  color: var(--muted);
+}
 .board-foot {
   grid-column: 1 / -1;
   max-width: 90ch;
+  margin-top: 4px;
+}
+
+/* ── The city's day ─────────────────────────────────────────────────────── */
+
+.curve {
+  margin: 0;
+  background: var(--plane);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.curve-cap {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.curve svg {
+  overflow: visible;
+  display: block;
+}
+.curve .note {
+  margin-top: 10px;
+}
+.hbar {
+  cursor: pointer;
+}
+.hbar:hover {
+  opacity: 0.75;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+
+.foot {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  padding-block: 24px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+.foot .note {
+  max-width: 90ch;
+}
+.foot .note + .note {
+  margin-top: 8px;
+}
+.foot a {
+  color: var(--secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

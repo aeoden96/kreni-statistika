@@ -8,34 +8,75 @@
       name="description"
       content="Typical deviation from schedule for every ZET stop, by hour and day. Built from historical GTFS-Realtime observations."
     />
+    <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />
+    <!-- The scale itself, at 32px: bars below the baseline are early, above are late. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0b0b'/%3E%3Crect x='5' y='16' width='4' height='8' rx='1.5' fill='%233987e5'/%3E%3Crect x='11' y='12' width='4' height='4' rx='1.5' fill='%23ea9a93'/%3E%3Crect x='17' y='7' width='4' height='9' rx='1.5' fill='%23d75853'/%3E%3Crect x='23' y='16' width='4' height='7' rx='1.5' fill='%23256abf'/%3E%3C/svg%3E"
+    />
   </head>
   <body>
     <div id="app">
-      <header id="headline"></header>
-      <div class="controls">
-        <div class="row">
-          <div class="group" role="group" aria-label="Day type">
-            <button data-mode="wd" class="on">Weekdays</button>
-            <button data-mode="we">Weekends</button>
-          </div>
-          <div class="group" role="group" aria-label="Vehicle type">
-            <button data-filter="all" class="on">All</button>
-            <button data-filter="tram">Tram</button>
-            <button data-filter="bus">Bus</button>
-          </div>
-          <button id="play">▶ Play day</button>
+      <header class="hero">
+        <div class="wrap">
+          <p class="eyebrow">statistika.kreni.app · ZET schedule adherence</p>
+          <div id="headline"></div>
         </div>
-        <div class="row slider-row">
-          <label for="hour">Hour</label>
-          <input id="hour" type="range" min="0" max="23" value="8" step="1" />
-          <output id="hour-label">08:00</output>
-        </div>
-        <div id="legend" class="legend"></div>
-        <p id="coverage" class="coverage"></p>
-      </div>
-      <div id="map"></div>
-      <aside id="panel"></aside>
-      <section id="tables"></section>
+      </header>
+
+      <main class="wrap">
+        <section class="sec" aria-labelledby="explore-h">
+          <div class="sec-head">
+            <h2 id="explore-h">Every stop, hour by hour</h2>
+            <p class="note">
+              Each dot is a station, coloured by how far from its timetable it typically runs at the hour you pick. Click one for
+              its whole day, and for the lines through it.
+            </p>
+          </div>
+          <div class="controls">
+            <div class="row">
+              <div class="group" role="group" aria-label="Day type">
+                <button data-mode="wd" class="on">Weekdays</button>
+                <button data-mode="we">Weekends</button>
+              </div>
+              <div class="group" role="group" aria-label="Vehicle type">
+                <button data-filter="all" class="on">All</button>
+                <button data-filter="tram">Tram</button>
+                <button data-filter="bus">Bus</button>
+              </div>
+              <div class="slider-row">
+                <input id="hour" type="range" min="0" max="23" value="8" step="1" aria-label="Hour of day" />
+                <output id="hour-label" for="hour">08:00</output>
+              </div>
+              <button id="play">▶ Play day</button>
+            </div>
+            <div class="row meta-row">
+              <div id="legend" class="legend"></div>
+              <p id="coverage" class="coverage"></p>
+            </div>
+          </div>
+          <div class="stage">
+            <div id="map"></div>
+            <aside id="panel"></aside>
+          </div>
+        </section>
+
+        <section class="sec" aria-labelledby="rank-h">
+          <div class="sec-head">
+            <h2 id="rank-h">Rankings</h2>
+            <p class="note">
+              Everything below describes the same hour as the map. Nothing here is a whole-day average, because on this network
+              the day averages across a sign change.
+            </p>
+          </div>
+          <div id="tables"></div>
+        </section>
+      </main>
+
+      <footer class="foot">
+        <div class="wrap" id="prov"></div>
+      </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

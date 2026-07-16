@@ -257,24 +257,40 @@ function renderHeadline(s: CitySummary) {
   const peakLate = curve.mean[late] ?? 0;
   const peakEarly = curve.mean[early] ?? 0;
 
+  const day = state.mode === 'wd' ? 'weekdays' : 'weekends';
+
+  // Claim, then the numbers it rests on, then the evidence beside it. The three
+  // stats are pulled out of the lede because they are what survives skimming —
+  // and the third is there to undercut the first two on purpose.
   $('#headline').innerHTML = `
-    <h1>ZET runs late when you need it, and early when you don't</h1>
-    <p class="lede">It depends entirely on <strong>when</strong> you travel. At <strong>${hh(late)}</strong> the network
-      is typically <strong>${describe(peakLate)}</strong> and <strong>${curve.late[late]}% of departures run late</strong>.
-      By <strong>${hh(early)}</strong> it is <strong>${describe(peakEarly)}</strong>, with ${curve.early[early]}% running ahead
-      of schedule.</p>
-    <p class="note">The whole-week average — ${plainDeviation(s.headline.netMeanSeconds ?? 0)} — describes no journey
-      anyone actually makes. Running ahead of schedule is not a bonus, but this data cannot tell you whether an early
-      vehicle waits at the stop or leaves without you: ZET's feed reports one deviation per stop, not separate
-      arrival and departure times.
-      Based on ${(s.source.totalSamples ?? 0).toLocaleString('en')} observations across
-      ${s.coverage.stationsMapped.toLocaleString('en')} stations; schedule from ZET feed
-      ${s.gtfs.feedVersion}, reference week ${Object.values(s.gtfs.referenceWeek).sort()[0]}.</p>
-    <div class="curve">
+    <div class="hero-copy">
+      <h1>ZET runs late when you need it, and early when you don't</h1>
+      <p class="lede">It depends entirely on <strong>when</strong> you travel. Through the afternoon the network runs
+        <strong>minutes behind</strong> its timetable; overnight it runs <strong>minutes ahead</strong> of it. Running ahead
+        is not a bonus — though this data cannot tell you whether an early vehicle waits for you or leaves without you.</p>
+    </div>
+    <figure class="curve">
+      <figcaption class="curve-cap">The whole network, hour by hour · ${day}</figcaption>
       ${cityCurve(curve, theme, state.hour)}
-      <p class="note tiny">Typical deviation across the whole network, ${state.mode === 'wd' ? 'weekdays' : 'weekends'},
-        weighted by scheduled departures. Click an hour to jump to it.</p>
+      <p class="note tiny">Typical deviation from schedule, weighted by scheduled departures. Click an hour to send the
+        map and the rankings to it.</p>
+    </figure>
+    <div class="stats">
+      <div class="stat">
+        <span class="k">Worst hour</span><span class="v">${hh(late)}</span>
+        <span class="s">${plainDeviation(peakLate)} · ${curve.late[late]}% of departures late</span>
+      </div>
+      <div class="stat">
+        <span class="k">Furthest ahead</span><span class="v">${hh(early)}</span>
+        <span class="s">${plainDeviation(peakEarly)} · ${curve.early[early]}% run early</span>
+      </div>
+      <div class="stat">
+        <span class="k">Whole-week average</span><span class="v">${plainDeviation(s.headline.netMeanSeconds ?? 0)}</span>
+        <span class="s">describes no journey anyone makes</span>
+      </div>
     </div>`;
+
+  renderProvenance(s);
 
   for (const el of document.querySelectorAll<SVGRectElement>('.hbar')) {
     el.addEventListener('click', () => {
@@ -285,6 +301,27 @@ function renderHeadline(s: CitySummary) {
       redraw();
     });
   }
+}
+
+/**
+ * Where the numbers come from, and what they cannot say.
+ *
+ * In the footer rather than the hero: it is what a reader checks *after* being
+ * convinced, and eleven lines of feed versions and sample thresholds under the
+ * headline buried the argument they were meant to support. Demoted, not dropped —
+ * the caveats are the reason to trust the rest.
+ */
+function renderProvenance(s: CitySummary) {
+  const week = Object.values(s.gtfs.referenceWeek).sort()[0];
+  $('#prov').innerHTML = `
+    <p class="note">Built from ${(s.source.totalSamples ?? 0).toLocaleString('en')} observations of ZET's public
+      GTFS-Realtime feed across ${s.coverage.stationsMapped.toLocaleString('en')} stations, compared against the scheduled
+      times in ZET's GTFS feed ${escapeHtml(s.gtfs.feedVersion ?? '—')} (reference week ${week}). Every figure is a typical
+      deviation from the timetable, in minutes; negative is early.</p>
+    <p class="note">ZET's feed reports a single deviation per stop rather than separate arrival and departure times, so a
+      vehicle that arrives early and waits cannot be distinguished from one that leaves early. Hours with fewer than
+      ${s.coverage.minSamples} observations are marked as too few samples and never drawn as zero, and stops with no
+      scheduled service are drawn as nothing at all. An independent project; not affiliated with or endorsed by ZET.</p>`;
 }
 
 /** Legend is always present: identity must never be colour-alone. */

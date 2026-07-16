@@ -14,13 +14,41 @@ import { readCell, type CityCurve, type DayMode, type StopProperties } from './d
 import { DOMAIN_SECONDS, colorFor, describe, ink, type Mode } from './scale';
 import type { RouteEntry } from './routes';
 
-const H = 132;
 const BAR_W = 11;
 const GAP = 2;
-const MID = H / 2;
+
+/**
+ * Labels get their own bands; the plot keeps the rest.
+ *
+ * A diverging chart has no spare corner. Every label used to be placed inside
+ * the plot and collide with something: the hour ticks sat on the zero line at
+ * exactly the x of their own hour, so "0h" was drawn *through* the midnight bar,
+ * and the range captions sat in corners that late-evening bars reach. Reserving
+ * CAP above and AXIS below makes overlap impossible by construction rather than
+ * by hoping the data stays out of the way.
+ */
+const CAP = 12;
+const AXIS = 14;
+const PLOT = 114;
+const H = CAP + PLOT + AXIS;
+const MID = CAP + PLOT / 2;
+/**
+ * Right margin for the range captions, which are anchored to the viewBox edge.
+ *
+ * Measured, not guessed: "−3.6 min early" is 67.8 units wide and the "18h" tick
+ * ends at 249.3, leaving 62.7 in a 312-unit box — a 5-unit overlap. Widening the
+ * box keeps the wording intact; the alternative was truncating the label to fit.
+ */
+const PAD_R = 16;
+/** Bars stop just short of the bands, so a clamped value still reads as clamped. */
+const REACH = PLOT / 2 - 4;
 
 /** Clamped so one −24 min outlier cannot flatten the other 23 bars. */
-const y = (v: number) => (Math.max(-DOMAIN_SECONDS, Math.min(DOMAIN_SECONDS, v)) / DOMAIN_SECONDS) * (H / 2 - 8);
+const y = (v: number) => (Math.max(-DOMAIN_SECONDS, Math.min(DOMAIN_SECONDS, v)) / DOMAIN_SECONDS) * REACH;
+
+/** The hour ruler, in the bottom band. */
+const hourTicks = (c: { muted: string }) =>
+  [0, 6, 12, 18].map((h) => `<text x="${h * (BAR_W + GAP)}" y="${H - 3}" font-size="8" fill="${c.muted}">${h}h</text>`).join('');
 
 export function barChart(props: StopProperties, mode: DayMode, theme: Mode, activeHour: number): string {
   const c = ink(theme);
@@ -47,13 +75,13 @@ export function barChart(props: StopProperties, mode: DayMode, theme: Mode, acti
   }
 
   return `
-    <svg viewBox="0 0 ${w} ${H}" width="100%" height="${H}" role="img"
+    <svg viewBox="0 0 ${w + PAD_R} ${H}" width="100%" height="${H}" role="img"
          aria-label="Typical deviation from schedule by hour. Bars below the line are early, above are late.">
-      <line x1="0" y1="${MID}" x2="${w}" y2="${MID}" stroke="${c.grid}" stroke-width="1"/>
+      <line x1="0" y1="${MID}" x2="${w + PAD_R}" y2="${MID}" stroke="${c.grid}" stroke-width="1"/>
       ${bars.join('')}
-      <text x="0" y="10" font-size="9" fill="${c.muted}">late</text>
-      <text x="0" y="${H - 2}" font-size="9" fill="${c.muted}">early</text>
-      ${[0, 6, 12, 18].map((h) => `<text x="${h * (BAR_W + GAP)}" y="${MID + 3}" font-size="8" fill="${c.muted}">${h}h</text>`).join('')}
+      <text x="${w + PAD_R}" y="9" font-size="9" fill="${c.muted}" text-anchor="end">late</text>
+      <text x="${w + PAD_R}" y="${H - 3}" font-size="9" fill="${c.muted}" text-anchor="end">early</text>
+      ${hourTicks(c)}
     </svg>`;
 }
 
@@ -76,7 +104,7 @@ export function cityCurve(curve: CityCurve, theme: Mode, activeHour: number): st
   // Its own scale, like the route profile: the city curve peaks near +2 min and
   // the map's ±5 min clamp would squash the whole day into a flat smear.
   const span = Math.max(60, ...values.map(Math.abs));
-  const scale = (v: number) => (v / span) * (H / 2 - 12);
+  const scale = (v: number) => (v / span) * REACH;
 
   const bars = curve.mean.map((v, hour) => {
     const x = hour * (BAR_W + GAP);
@@ -93,13 +121,13 @@ export function cityCurve(curve: CityCurve, theme: Mode, activeHour: number): st
 
   const cap = `${(span / 60).toFixed(1)} min`;
   return `
-    <svg viewBox="0 0 ${w} ${H}" width="100%" height="${H}" role="img"
+    <svg viewBox="0 0 ${w + PAD_R} ${H}" width="100%" height="${H}" role="img"
          aria-label="Typical deviation across the whole network by hour. Bars below the line are early, above are late.">
-      <line x1="0" y1="${MID}" x2="${w}" y2="${MID}" stroke="${c.grid}" stroke-width="1"/>
+      <line x1="0" y1="${MID}" x2="${w + PAD_R}" y2="${MID}" stroke="${c.grid}" stroke-width="1"/>
       ${bars.join('')}
-      <text x="0" y="10" font-size="9" fill="${c.muted}">+${cap} late</text>
-      <text x="0" y="${H - 2}" font-size="9" fill="${c.muted}">−${cap} early</text>
-      ${[0, 6, 12, 18].map((h) => `<text x="${h * (BAR_W + GAP)}" y="${MID + 3}" font-size="8" fill="${c.muted}">${h}h</text>`).join('')}
+      <text x="${w + PAD_R}" y="9" font-size="9" fill="${c.muted}" text-anchor="end">+${cap} late</text>
+      <text x="${w + PAD_R}" y="${H - 3}" font-size="9" fill="${c.muted}" text-anchor="end">−${cap} early</text>
+      ${hourTicks(c)}
     </svg>`;
 }
 
@@ -148,7 +176,7 @@ export function routeProfile(
    * drama by autoscaling.
    */
   const span = Math.max(120, ...points.map((p) => Math.abs(p.v)));
-  const scale = (v: number) => (v / span) * (H / 2 - 12);
+  const scale = (v: number) => (v / span) * REACH;
 
   const dots = points.map((p) => {
     const isHere = route.stops[p.i] === highlight;
@@ -182,8 +210,8 @@ export function routeProfile(
       <line x1="0" y1="${MID}" x2="${w}" y2="${MID}" stroke="${c.grid}" stroke-width="1"/>
       ${trend}
       ${dots.join('')}
-      <text x="0" y="10" font-size="9" fill="${c.muted}">+${cap} late</text>
-      <text x="0" y="${H - 2}" font-size="9" fill="${c.muted}">−${cap} early</text>
-      <text x="${w}" y="${H - 2}" font-size="9" fill="${c.muted}" text-anchor="end">terminus →</text>
+      <text x="0" y="9" font-size="9" fill="${c.muted}">+${cap} late</text>
+      <text x="0" y="${H - 3}" font-size="9" fill="${c.muted}">−${cap} early</text>
+      <text x="${w}" y="${H - 3}" font-size="9" fill="${c.muted}" text-anchor="end">terminus →</text>
     </svg>`;
 }
