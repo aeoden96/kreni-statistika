@@ -81,19 +81,37 @@ export function routeProfile(
   const n = route.stops.length;
   const px = (i: number) => 4 + (i / Math.max(1, n - 1)) * (w - 8);
 
-  const dots: string[] = [];
+  const points: { i: number; name: string; shared: boolean; v: number }[] = [];
   for (let i = 0; i < n; i++) {
     const props = byStop.get(route.stops[i]);
     const v = props?.[mode]?.[hour];
     if (v === null || v === undefined) continue;
-    const cy = MID - y(v);
-    const isHere = route.stops[i] === highlight;
-    dots.push(
-      `<circle cx="${px(i).toFixed(1)}" cy="${cy.toFixed(1)}" r="${isHere ? 5 : 3}"` +
-        ` fill="${colorFor(v, theme)}" stroke="${isHere ? c.primary : c.surface}" stroke-width="${isHere ? 2 : 1}">` +
-        `<title>${props?.name ?? route.stops[i]} — ${describe(v)}${route.exclusive[i] ? '' : ' (shared with other lines)'}</title></circle>`,
-    );
+    points.push({ i, name: props?.name ?? route.stops[i], shared: !route.exclusive[i], v });
   }
+
+  /**
+   * This chart sets its own scale, and must.
+   *
+   * The map clamps at ±5 min so a −24 min outlier cannot flatten the city. Reuse
+   * that here and route 268 at 16:00 — every stop between +7 and +21 min late —
+   * pins every dot to the ceiling and draws a flat line under a verdict reading
+   * "builds up 13.4 min". The chart would contradict its own caption, and the
+   * chart is the part people believe.
+   *
+   * The floor keeps a route that never leaves ±2 min from being magnified into a
+   * drama by autoscaling.
+   */
+  const span = Math.max(120, ...points.map((p) => Math.abs(p.v)));
+  const scale = (v: number) => (v / span) * (H / 2 - 12);
+
+  const dots = points.map((p) => {
+    const isHere = route.stops[p.i] === highlight;
+    return (
+      `<circle cx="${px(p.i).toFixed(1)}" cy="${(MID - scale(p.v)).toFixed(1)}" r="${isHere ? 5 : 3}"` +
+      ` fill="${colorFor(p.v, theme)}" stroke="${isHere ? c.primary : c.surface}" stroke-width="${isHere ? 2 : 1}">` +
+      `<title>${p.name} — ${describe(p.v)}${p.shared ? ' (shared with other lines)' : ''}</title></circle>`
+    );
+  });
 
   // The fitted line, drawn only where it is trustworthy. A trend line over
   // scatter is an assertion the data does not support.
@@ -102,11 +120,15 @@ export function routeProfile(
   const r2 = route[mode].r2[hour];
   let trend = '';
   if (slope !== null && offset !== null && r2 !== null && r2 >= 0.5) {
-    const y0 = MID - y(offset);
-    const y1 = MID - y(offset + slope * (n - 1));
+    const y0 = MID - scale(offset);
+    const y1 = MID - scale(offset + slope * (n - 1));
     trend = `<line x1="${px(0)}" y1="${y0.toFixed(1)}" x2="${px(n - 1)}" y2="${y1.toFixed(1)}"
       stroke="${c.secondary}" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.8"/>`;
   }
+
+  // Say what the scale is. Without it "the dots go up" has no magnitude, and the
+  // axis silently changes between routes and hours.
+  const cap = `${(span / 60).toFixed(span >= 120 ? 0 : 1)} min`;
 
   return `
     <svg viewBox="0 0 ${w} ${H}" width="100%" height="${H}" role="img"
@@ -114,8 +136,8 @@ export function routeProfile(
       <line x1="0" y1="${MID}" x2="${w}" y2="${MID}" stroke="${c.grid}" stroke-width="1"/>
       ${trend}
       ${dots.join('')}
-      <text x="0" y="10" font-size="9" fill="${c.muted}">late</text>
-      <text x="0" y="${H - 2}" font-size="9" fill="${c.muted}">early</text>
+      <text x="0" y="10" font-size="9" fill="${c.muted}">+${cap} late</text>
+      <text x="0" y="${H - 2}" font-size="9" fill="${c.muted}">−${cap} early</text>
       <text x="${w}" y="${H - 2}" font-size="9" fill="${c.muted}" text-anchor="end">terminus →</text>
     </svg>`;
 }

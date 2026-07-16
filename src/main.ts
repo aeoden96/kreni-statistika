@@ -325,12 +325,19 @@ function renderRoute(r: RouteEntry, platforms: string[]): string {
     d.kind === 'no-fit'
       ? `<strong>Not enough of this path has data</strong> at this hour to say anything about its shape.`
       : d.kind === 'noisy'
-        ? `<strong>No trend along the path.</strong> Deviation here does not depend on how far along you are
-           (fit quality ${d.r2.toFixed(2)} — too low to quote a trend). This is scatter, not accumulation.`
+        ? `<strong>No trend along the path.</strong> Deviation drifts about ${mins(d.total)} end to end, but how far
+           along you are does not explain it (fit quality ${d.r2.toFixed(2)} — too low to quote a trend). Scatter,
+           not accumulation.`
         : d.kind === 'flat'
-          ? `<strong>Flat the whole way</strong> — typically ${describe(d.offset)} from end to end. Vehicles are not
-             losing time along this path; they are off-schedule for its entire length, which is what a
-             miscalibrated timetable looks like.`
+          ? // Flat is not automatically bad news. A line that is flat AND on time is
+            // simply working, and calling that "a miscalibrated timetable" would
+            // libel the best-run routes on the network.
+            Math.abs(d.mean) <= 60
+            ? `<strong>Runs to schedule the whole way</strong> — typically ${describe(d.mean)}, and it does not drift
+               along the path. This is what a line that works looks like.`
+            : `<strong>Off by the same amount the whole way</strong> — typically ${describe(d.mean)}, end to end.
+               Vehicles are not losing time along this path; they are off-schedule for its entire length, which is
+               what a miscalibrated timetable looks like rather than congestion.`
           : d.kind === 'accumulating'
             ? `<strong>Deviation builds up along the path</strong> — about ${mins(d.total)} more late by the terminus
                than at the origin (${d.slope.toFixed(0)} s per stop, fit quality ${d.r2.toFixed(2)}). This is traffic

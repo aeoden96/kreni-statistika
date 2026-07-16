@@ -70,42 +70,57 @@ export interface RouteFile {
 
 /**
  * Thresholds for reading a fit. Chosen against the real distribution, not taste:
- * at 08h, r2 >= 0.5 keeps 61 of 250 paths and r2 < 0.3 rejects 143 — the shape
- * of the data, which is mostly flat-or-noisy with a real minority that climbs.
+ * at 08h, r2 >= 0.5 keeps 61 of 250 paths — the shape of the data, which is
+ * mostly flat-or-noisy with a real minority that climbs.
  */
 export const R2_TRUST = 0.5;
-export const R2_REJECT = 0.3;
-/** Below this, a "trend" is not worth a sentence: 10 s/stop over 20 stops is 3 min. */
-export const SLOPE_MEANINGFUL = 10;
+
+/**
+ * A path is "flat" when it drifts less than this **end to end** — not when its
+ * per-stop slope is small.
+ *
+ * The unit matters and the obvious choice is wrong. Route 268 to Velika Gorica
+ * gains 9.9 s per stop at 08h, which sounds like nothing; across its 22 stops
+ * that is **3.5 minutes**, which is the whole trip's punctuality. A per-stop
+ * threshold called that "flat" and printed "vehicles are not losing time along
+ * this path" underneath a chart visibly climbing from +2.3 to +7.2 min. Slope is
+ * meaningless without the route's length; total drift is the thing a rider feels.
+ */
+export const TOTAL_MEANINGFUL_S = 120;
+
+/** Matches the map's on-time deadband, so "flat" and "on time" agree. */
+export const DEADBAND_S = 60;
+
 /** Below this, `exclusiveShare` means the profile is a corridor, not a line. */
 export const EXCLUSIVE_IS_LINE = 80;
 
 export type Diagnosis =
   | { kind: 'no-fit' }
-  | { kind: 'noisy'; slope: number; r2: number }
-  | { kind: 'flat'; offset: Seconds; slope: number; r2: number }
-  | { kind: 'accumulating'; slope: number; r2: number; total: Seconds }
-  | { kind: 'shedding'; slope: number; r2: number; total: Seconds };
+  | { kind: 'noisy'; r2: number; total: Seconds }
+  /** Deviation barely changes along the path. `mean` says whether that is good news. */
+  | { kind: 'flat'; mean: Seconds; r2: number }
+  | { kind: 'accumulating'; r2: number; slope: number; total: Seconds }
+  | { kind: 'shedding'; r2: number; slope: number; total: Seconds };
 
 /**
  * What this path's deviation does along its length, at one hour.
  *
- * `total` is the drift across the whole path — slope x stops — because "gains
- * 84 seconds per stop" is not a human unit and "arrives 11 minutes later than it
- * left" is.
+ * `total` is the drift across the whole path, because "gains 84 seconds per
+ * stop" is not a human unit and "arrives 11 minutes later than it left" is.
  */
 export function diagnose(route: RouteEntry, mode: DayMode, hour: number): Diagnosis {
   const fit = route[mode];
   const slope = fit.slope[hour];
   const r2 = fit.r2[hour];
-  const offset = fit.offset[hour];
-  if (slope === null || r2 === null || offset === null) return { kind: 'no-fit' };
+  const mean = fit.mean[hour];
+  if (slope === null || r2 === null || mean === null) return { kind: 'no-fit' };
 
   const total = slope * (route.stops.length - 1);
-  if (Math.abs(slope) < SLOPE_MEANINGFUL) return { kind: 'flat', offset, r2, slope };
-  if (r2 < R2_REJECT) return { kind: 'noisy', r2, slope };
-  if (r2 < R2_TRUST) return { kind: 'flat', offset, r2, slope };
-  return slope > 0 ? { kind: 'accumulating', r2, slope, total } : { kind: 'shedding', r2, slope, total };
+  // Judge the drift a rider actually accumulates, not the per-stop rate.
+  if (Math.abs(total) < TOTAL_MEANINGFUL_S) return { kind: 'flat', mean, r2 };
+  // A real drift, but position does not explain it — so no trend may be quoted.
+  if (r2 < R2_TRUST) return { kind: 'noisy', r2, total };
+  return total > 0 ? { kind: 'accumulating', r2, slope, total } : { kind: 'shedding', r2, slope, total };
 }
 
 /** Which paths touch a given platform. */
