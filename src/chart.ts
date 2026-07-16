@@ -10,7 +10,7 @@
  * carries the meaning for anyone who cannot separate the hues.
  */
 
-import { readCell, type CityCurve, type DayMode, type StopProperties } from './data';
+import { readCell, type CityCurve, type DayMode, type StopProperties, type TrendWeek } from './data';
 import { DOMAIN_SECONDS, colorFor, describe, ink, type Mode } from './scale';
 import type { RouteEntry } from './routes';
 
@@ -128,6 +128,66 @@ export function cityCurve(curve: CityCurve, theme: Mode, activeHour: number): st
       <text x="${w + PAD_R}" y="9" font-size="9" fill="${c.muted}" text-anchor="end">+${cap} late</text>
       <text x="${w + PAD_R}" y="${H - 3}" font-size="9" fill="${c.muted}" text-anchor="end">−${cap} early</text>
       ${hourTicks(c)}
+    </svg>`;
+}
+
+/**
+ * The network over time: one bar per week, net deviation.
+ *
+ * The time-axis counterpart to `cityCurve` — same diverging form (below = early,
+ * above = late), but the x-axis is weeks, not hours. Weekly and not daily on
+ * purpose: a raw day-to-day line on this network mostly shows that Monday isn't
+ * Sunday, which is seasonality, not a trend. Its own scale, because the net
+ * weekly mean lives near ±1 min and the map's ±5 min clamp would flatten it.
+ *
+ * Bars are variable-width to fill the frame regardless of how many weeks exist,
+ * so a young series (a handful of weeks) and a mature one both read cleanly.
+ */
+const monthDay = (iso: string): string => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return `${d.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]}`;
+};
+
+export function trendChart(weeks: TrendWeek[], theme: Mode): string {
+  const c = ink(theme);
+  const values = weeks.map((w) => w.netMeanSeconds).filter((v): v is number => v !== null);
+  if (values.length === 0) return '';
+  const span = Math.max(60, ...values.map(Math.abs));
+  const scale = (v: number) => (v / span) * REACH;
+
+  const n = weeks.length;
+  // Fill a fixed frame: bar+gap sized to the count, capped so a 2-week series
+  // doesn't render one absurdly wide bar.
+  const W = 24 * (BAR_W + GAP); // same frame width as the city curve
+  const slot = Math.min(28, W / n);
+  const bw = Math.max(4, slot * 0.72);
+
+  const bars = weeks.map((wk, i) => {
+    const x = i * slot + (slot - bw) / 2;
+    const v = wk.netMeanSeconds;
+    if (v === null) return `<rect x="${x.toFixed(1)}" y="${MID - 0.5}" width="${bw.toFixed(1)}" height="1" fill="${c.muted}" opacity="0.45"/>`;
+    const dy = scale(v);
+    const top = v > 0 ? MID - dy : MID;
+    const h = Math.max(2, Math.abs(dy));
+    return (
+      `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${colorFor(v, theme)}">` +
+      `<title>Week of ${wk.weekStart} — ${describe(v)} · ${wk.samples.toLocaleString('en')} samples${wk.decayCrossing ? ' · spans a decay pass' : ''}</title></rect>`
+    );
+  });
+
+  const cap = `${(span / 60).toFixed(1)} min`;
+  // Scale captions live on the right; the "since" date sits bottom-left, where
+  // it can't collide with them. Direction (older → newer) reads left to right.
+  const since = `<text x="0" y="${H - 3}" font-size="8" fill="${c.muted}">since ${monthDay(weeks[0].weekStart)}</text>`;
+
+  return `
+    <svg viewBox="0 0 ${W + PAD_R} ${H}" width="100%" height="${H}" role="img"
+         aria-label="Network net deviation from schedule by week, oldest on the left. Bars below the line are early, above are late.">
+      <line x1="0" y1="${MID}" x2="${W + PAD_R}" y2="${MID}" stroke="${c.grid}" stroke-width="1"/>
+      ${bars.join('')}
+      <text x="${W + PAD_R}" y="9" font-size="9" fill="${c.muted}" text-anchor="end">+${cap} late</text>
+      <text x="${W + PAD_R}" y="${H - 3}" font-size="9" fill="${c.muted}" text-anchor="end">−${cap} early</text>
+      ${since}
     </svg>`;
 }
 

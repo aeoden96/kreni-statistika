@@ -13,19 +13,22 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { extremes } from './boards';
-import { barChart, cityCurve, routeProfile } from './chart';
+import { barChart, cityCurve, routeProfile, trendChart } from './chart';
 import {
   loadPlatforms,
   loadRoutes,
   loadStations,
   loadSummary,
+  loadTrends,
   readCell,
   type CitySummary,
   type DayMode,
   type StopCollection,
   type StopFeature,
   type StopProperties,
+  type Trends,
 } from './data';
+import { globalBoards } from './globals';
 import { DelayMap, matchesFilter, type FilterMode } from './map';
 import { diagnose, indexByStop, routeLabel, EXCLUSIVE_IS_LINE, type RouteEntry, type RouteFile } from './routes';
 import { tableView } from './table';
@@ -34,9 +37,27 @@ import './style.css';
 
 const theme: Mode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 
+/**
+ * H-A: open at the reader's actual local hour, not a fixed 08:00. "How is it
+ * right now" is the question someone arrives with, and making them hunt for the
+ * current hour on a 24-step slider before the page answers it is pure friction.
+ */
+const startHour = () => {
+  const h = new Date().getHours();
+  return Number.isInteger(h) && h >= 0 && h <= 23 ? h : 8;
+};
+
+/**
+ * Whether the hour is an explicit choice — from a shared URL or a user action —
+ * rather than the "now" default. Only a pinned hour is written back to the URL,
+ * so the bare page keeps meaning "now" on every visit while a shared link stays
+ * exact: the hour is as much a part of a linked claim here as the stop is.
+ */
+let hourPinned = false;
+
 const state = {
   filter: 'all' as FilterMode,
-  hour: 8,
+  hour: startHour(),
   mode: 'wd' as DayMode,
   route: null as string | null,
   selected: null as string | null,
@@ -58,7 +79,10 @@ function readUrl() {
   const rawHour = q.get('hour');
   if (rawHour !== null && rawHour !== '') {
     const hour = Number(rawHour);
-    if (Number.isInteger(hour) && hour >= 0 && hour <= 23) state.hour = hour;
+    if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
+      state.hour = hour;
+      hourPinned = true;
+    }
   }
   if (q.get('day') === 'we') state.mode = 'we';
   const filter = q.get('filter');
@@ -69,7 +93,7 @@ function readUrl() {
 
 function writeUrl() {
   const q = new URLSearchParams();
-  if (state.hour !== 8) q.set('hour', String(state.hour));
+  if (hourPinned) q.set('hour', String(state.hour));
   if (state.mode !== 'wd') q.set('day', state.mode);
   if (state.filter !== 'all') q.set('filter', state.filter);
   if (state.selected) q.set('stop', state.selected);
@@ -102,10 +126,17 @@ async function main() {
   let stations: StopCollection;
   let summary: CitySummary;
   let loadedRoutes: RouteFile | null = null;
+  let trends: Trends | null = null;
   try {
     // routes.json rides along with the first paint: the line board is a headline
-    // answer, not a drill-down, so it cannot wait for a click.
-    [stations, summary, loadedRoutes] = await Promise.all([loadStations(), loadSummary(), loadRoutes().catch(() => null)]);
+    // answer, not a drill-down, so it cannot wait for a click. trends.json is
+    // optional — a missing file must never break the page, only hide its section.
+    [stations, summary, loadedRoutes, trends] = await Promise.all([
+      loadStations(),
+      loadSummary(),
+      loadRoutes().catch(() => null),
+      loadTrends().catch(() => null),
+    ]);
     routeFile = loadedRoutes;
     if (routeFile) routesAtStop = indexByStop(routeFile);
   } catch (err) {
@@ -114,6 +145,9 @@ async function main() {
   }
 
   renderLegend();
+  // Static and hour-independent, and rendered *before* the map so it survives a
+  // WebGL failure (the map's catch returns early) — unlike the rankings below it.
+  renderTrends(trends);
 
   // MapLibre needs WebGL. Where it is unavailable (old hardware, blocked
   // drivers, some headless/VM setups) the map must say so rather than leave a
@@ -180,8 +214,23 @@ async function main() {
     if (state.selected === id) renderPanel(byId.get(id));
   };
 
+  // Whole-week global boards: static, rendered once, and independent of the
+  // hour/day/filter controls — so deliberately outside draw(). Rows are still a
+  // way into the map, so they select and fly like the hour-scoped tables.
+  $('#globals').innerHTML = globalBoards(summary.leaderboards, theme);
+  for (const row of document.querySelectorAll<HTMLTableRowElement>('#globals tr[data-stop]')) {
+    row.addEventListener('click', () => {
+      const id = row.dataset.stop;
+      if (!id) return;
+      void select(id);
+      const f = byId.get(id);
+      if (f) map.flyTo(f);
+    });
+  }
+
   $<HTMLInputElement>('#hour').addEventListener('input', (e) => {
     state.hour = Number((e.target as HTMLInputElement).value);
+    hourPinned = true;
     draw();
   });
   for (const el of document.querySelectorAll<HTMLButtonElement>('[data-mode]')) {
@@ -211,6 +260,7 @@ async function main() {
     btn.textContent = '❚❚ Pause';
     playing = window.setInterval(() => {
       state.hour = (state.hour + 1) % 24;
+      hourPinned = true;
       $<HTMLInputElement>('#hour').value = String(state.hour);
       draw();
     }, 700);
@@ -297,6 +347,7 @@ function renderHeadline(s: CitySummary) {
       const h = Number(el.dataset.hour);
       if (!Number.isInteger(h)) return;
       state.hour = h;
+      hourPinned = true;
       $<HTMLInputElement>('#hour').value = String(h);
       redraw();
     });
@@ -322,6 +373,37 @@ function renderProvenance(s: CitySummary) {
       vehicle that arrives early and waits cannot be distinguished from one that leaves early. Hours with fewer than
       ${s.coverage.minSamples} observations are marked as too few samples and never drawn as zero, and stops with no
       scheduled service are drawn as nothing at all. An independent project; not affiliated with or endorsed by ZET.</p>`;
+}
+
+/**
+ * The trend section. Static and optional: with fewer than two weeks of history
+ * it shows an "accumulating" note instead of a chart, because a one-bar trend is
+ * not a trend. Rendered before the map so a WebGL failure cannot hide it.
+ */
+function renderTrends(trends: Trends | null) {
+  const host = document.querySelector('#trends');
+  if (!host) return;
+  if (!trends || trends.weekly.length < 2) {
+    const days = trends?.window.days ?? 0;
+    host.innerHTML = `<p class="note">Trend data is still accumulating${
+      days ? ` — ${days} day${days === 1 ? '' : 's'} so far` : ''
+    }. This needs a few weeks of history before it can show whether the network is drifting.</p>`;
+    return;
+  }
+  const delta = trends.latest.vsPriorMonthSeconds;
+  const badge =
+    delta === null
+      ? ''
+      : ` · <span class="trend-delta ${delta > 0 ? 'worse' : 'better'}">${delta > 0 ? '▲' : '▼'} ${Math.abs(delta / 60).toFixed(1)} min ${
+          delta > 0 ? 'later' : 'earlier'
+        } than a month ago</span>`;
+  host.innerHTML = `
+    <figure class="curve trend">
+      <figcaption class="curve-cap">Net deviation across the network, by week${badge}</figcaption>
+      ${trendChart(trends.weekly, theme)}
+      <p class="note tiny">One bar per week; below the line is early, above is late. Weekly, because day-to-day mostly
+        reflects that Monday isn't Sunday. The most recent week may still be filling in.</p>
+    </figure>`;
 }
 
 /** Legend is always present: identity must never be colour-alone. */

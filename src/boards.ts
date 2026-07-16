@@ -30,7 +30,7 @@
 
 import { cellIndex, type CityCurve, type DayMode, type Seconds, type StopFeature, type StopProperties } from './data';
 import type { FilterMode } from './map';
-import { diagnose, type Diagnosis, type RouteEntry, type RouteFile } from './routes';
+import { DEADBAND_S, diagnose, type Diagnosis, type RouteEntry, type RouteFile } from './routes';
 
 /**
  * Observations behind an hour's mean before it may be ranked. MIN_SAMPLES (10)
@@ -132,6 +132,45 @@ export function routeBoard(file: RouteFile, mode: DayMode, hour: number, filter:
     });
   }
   return rows.sort((a, b) => Math.abs(b.mean) - Math.abs(a.mean));
+}
+
+export interface HeadwayRow {
+  /** Scheduled minutes between vehicles at this hour. */
+  headway: number;
+  mean: Seconds;
+  route: RouteEntry;
+  /** |mean| as a fraction of one headway — 1.0 means "off by a whole gap". */
+  share: number;
+  stops: number;
+}
+
+/**
+ * H-B — lines whose typical error is largest **relative to how often they run.**
+ *
+ * Absolute seconds is a misleading way to rank lines: a tram every 5 minutes that
+ * is 4 minutes off has effectively no usable timetable — you cannot plan around
+ * it, you just turn up and wait — while an hourly bus 4 minutes off is fine. This
+ * board expresses each line's deviation as a share of its own headway, so the top
+ * of it is the timetables you genuinely cannot trust.
+ *
+ * Same eligibility as `routeBoard` (min stops, vehicle filter), plus two guards:
+ * a headway must actually exist for the hour, and the line must be outside the
+ * on-time deadband — a line within ±60 s is "on time" and has no untrustworthy
+ * headway to report, however small its interval.
+ */
+export function routeBoardByHeadway(file: RouteFile, mode: DayMode, hour: number, filter: FilterMode = 'all', minStops = 6): HeadwayRow[] {
+  const rows: HeadwayRow[] = [];
+  for (const route of file.routes) {
+    if (filter === 'tram' && route.type !== 0) continue;
+    if (filter === 'bus' && route.type === 0) continue;
+    const mean = route[mode].mean[hour];
+    const headway = route[mode === 'wd' ? 'wdHeadway' : 'weHeadway'][hour];
+    if (mean === null || route[mode].n[hour] < minStops) continue;
+    if (headway === null || headway <= 0) continue;
+    if (Math.abs(mean) <= DEADBAND_S) continue;
+    rows.push({ headway, mean, route, share: Math.abs(mean) / (headway * 60), stops: route[mode].n[hour] });
+  }
+  return rows.sort((a, b) => b.share - a.share);
 }
 
 /** The hour a rider should most avoid, and the one the schedule fits best. */

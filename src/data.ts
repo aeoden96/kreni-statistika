@@ -110,6 +110,38 @@ export interface LeaderboardRow {
   weeklyDepartures: number;
 }
 
+/**
+ * The time series, built by kreni-core `yarn trends` from the dated
+ * `data-archive` snapshots. Optional: the file may not exist yet, and the site
+ * must render without it. `netMeanSeconds` is null for a gap (a missing day or a
+ * decay artifact); the early/on-time/late split is null before the snapshot
+ * enrichment date (schema v2), so treat it as "may be absent" everywhere.
+ */
+export interface TrendWeek {
+  days: number;
+  decayCrossing: boolean;
+  early: number | null;
+  late: number | null;
+  netMeanSeconds: number | null;
+  onTime: number | null;
+  samples: number;
+  weekStart: string;
+}
+export interface TrendDay {
+  date: string;
+  decayCrossing: boolean;
+  netMeanSeconds: number | null;
+  samples: number | null;
+}
+export interface Trends {
+  daily: TrendDay[];
+  generatedAt: string;
+  latest: { netMeanSeconds: number | null; vsPriorMonthSeconds: number | null };
+  schemaVersion: number;
+  weekly: TrendWeek[];
+  window: { days: number; firstDate: string | null; lastDate: string | null; weeks: number };
+}
+
 const base = import.meta.env.BASE_URL;
 
 async function getJson<T>(path: string): Promise<T> {
@@ -128,6 +160,8 @@ export const loadSummary = () => getJson<CitySummary>('city-summary.json');
 export const loadStops = () => getJson<StopCollection>('stops.geojson');
 /** Lazy: route sequences carry no deviations, only the join keys into stops.geojson. */
 export const loadRoutes = () => getJson<import('./routes').RouteFile>('routes.json');
+/** Optional: call with `.catch(() => null)` — a missing file is not an error. */
+export const loadTrends = () => getJson<Trends>('trends.json');
 
 /**
  * Platform detail, for drawing a route's profile. 535 KB gz and needed only once

@@ -61,12 +61,111 @@ body {
   border-bottom: 1px solid var(--border);
   padding-block: var(--band);
 }
+/* Eyebrow on the left, the call to action on the right. The stats site is a
+   dead end otherwise — a reader convinced their line is late has nowhere to act
+   on it, and the live app was mentioned only in the map's attribution string. */
+.hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
 .eyebrow {
-  margin: 0 0 20px;
+  margin: 0;
   font-size: 11px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* The one thing on the page we want a click on, so it is the only saturated
+   element in the hero: a blue→indigo gradient pill (the scale's early-blue, on
+   brand), a live-pulse dot because kreni.app is the *live* app, a sheen that
+   sweeps on hover and an arrow that leans into the click. Motion is all inside
+   :hover and the global prefers-reduced-motion rule stills the pulse. */
+.cta {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  text-decoration: none;
+  color: #fff;
+  white-space: nowrap;
+  background: linear-gradient(120deg, #1f5fb2 0%, #3987e5 45%, #6b5cf0 100%);
+  background-size: 175% 175%;
+  background-position: 0% 50%;
+  box-shadow: 0 2px 10px rgba(45, 96, 200, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background-position 0.6s ease;
+}
+.cta:hover {
+  transform: translateY(-1.5px);
+  background-position: 100% 50%;
+  box-shadow: 0 8px 22px rgba(74, 92, 240, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+/* Sheen: a light band parked off the left edge that sweeps across on hover. */
+.cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(75deg, transparent 32%, rgba(255, 255, 255, 0.38) 50%, transparent 68%);
+  transform: translateX(-125%);
+}
+.cta:hover::before {
+  animation: cta-sheen 0.7s ease;
+}
+@keyframes cta-sheen {
+  to {
+    transform: translateX(125%);
+  }
+}
+.cta-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+  animation: cta-pulse 2s ease-out infinite;
+}
+@keyframes cta-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.65);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(74, 222, 128, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+  }
+}
+.cta-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.cta-main {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.cta-host {
+  font-size: 11px;
+  opacity: 0.82;
+  letter-spacing: 0.02em;
+}
+.cta-arrow {
+  flex: none;
+  transition: transform 0.16s ease;
+}
+.cta:hover .cta-arrow {
+  transform: translateX(3px);
 }
 
 /* Claim on the left, evidence on the right. The curve is not decoration — it is
@@ -422,15 +521,62 @@ button.on:hover {
    names onto two lines and clip the last column. Two columns fits the longest
    row ("Kobiljak-trgovina · 16.4 min late · 35") on one line at every desktop
    width, and pairs the boards 2x2. */
+/* The hour-scoped rankings are a stack of labelled groups (lines, then stops),
+   so the reader is told what each band ranks before reading four look-alike
+   cards. The whole-week globals stay a flat 2-up grid under their own heading. */
 #tables {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 3vw, 34px);
+}
+#globals {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--gap);
   align-items: start;
 }
 @media (min-width: 680px) {
-  #tables {
+  #globals {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A group: a small caption band, then its cards. */
+.rank-group-head {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+}
+.rank-group-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+.rank-group-head .note {
+  margin-top: 3px;
+}
+.rank-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap);
+  align-items: start;
+}
+/* Lines: two cards, side by side once there is room. */
+@media (min-width: 680px) {
+  .rank-lines {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rank-stops {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* Stops: three cards, so they earn a third track on a wide screen. */
+@media (min-width: 1040px) {
+  .rank-stops {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 /* min-width:0 lets the grid item shrink; without it the nowrap table sets a
@@ -443,7 +589,8 @@ button.on:hover {
   box-shadow: var(--shadow);
   padding: 14px;
 }
-.board h3 {
+.board h3,
+.board h4 {
   font-size: 14px;
   margin: 0 0 2px;
   letter-spacing: -0.01em;
@@ -514,6 +661,11 @@ tr.pick:hover td:first-child {
 .mark {
   color: var(--muted);
 }
+/* The "of 6′" that follows a headway-share percentage: present but recessive. */
+.unit {
+  color: var(--muted);
+  font-size: 11px;
+}
 .board-foot {
   grid-column: 1 / -1;
   max-width: 90ch;
@@ -548,6 +700,27 @@ tr.pick:hover td:first-child {
 }
 .hbar:hover {
   opacity: 0.75;
+}
+
+/* "vs last month" badge in the trend caption — tinted by direction, on the same
+   diverging poles as the bars (blue = earlier, red = later). */
+.trend-delta {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: middle;
+}
+.trend-delta.worse {
+  color: #b13f3c;
+  background: rgba(215, 88, 83, 0.14);
+}
+.trend-delta.better {
+  color: #256abf;
+  background: rgba(57, 135, 229, 0.14);
 }
 
 /* ── Footer ─────────────────────────────────────────────────────────────── */

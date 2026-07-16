@@ -20,7 +20,19 @@
     <div id="app">
       <header class="hero">
         <div class="wrap">
-          <p class="eyebrow">statistika.kreni.app · ZET schedule adherence</p>
+          <div class="hero-top">
+            <p class="eyebrow">statistika.kreni.app · ZET schedule adherence</p>
+            <a class="cta" href="https://kreni.app" target="_blank" rel="noopener">
+              <span class="cta-dot" aria-hidden="true"></span>
+              <span class="cta-text">
+                <span class="cta-main">Open the live app</span>
+                <span class="cta-host">kreni.app</span>
+              </span>
+              <svg class="cta-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+                <path d="M5 12h13M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </a>
+          </div>
           <div id="headline"></div>
         </div>
       </header>
@@ -62,6 +74,17 @@
           </div>
         </section>
 
+        <section class="sec" aria-labelledby="trend-h">
+          <div class="sec-head">
+            <h2 id="trend-h">Is ZET getting worse?</h2>
+            <p class="note">
+              How the whole network's punctuality has moved over time, one bar per week. This is the one view that needs
+              history to accrue — it fills in as the weeks pass.
+            </p>
+          </div>
+          <div id="trends"></div>
+        </section>
+
         <section class="sec" aria-labelledby="rank-h">
           <div class="sec-head">
             <h2 id="rank-h">Rankings</h2>
@@ -71,6 +94,18 @@
             </p>
           </div>
           <div id="tables"></div>
+        </section>
+
+        <section class="sec" aria-labelledby="global-h">
+          <div class="sec-head">
+            <h2 id="global-h">Across the whole week</h2>
+            <p class="note">
+              For orientation only, and independent of the controls above. These average over the entire week — which on
+              this network averages across a sign change — so read them as a rough "who stands out overall", not as the
+              answer to "how is it right now". Only stops with enough observations to trust are listed.
+            </p>
+          </div>
+          <div id="globals"></div>
         </section>
       </main>
 

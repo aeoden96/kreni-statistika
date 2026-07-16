@@ -16,7 +16,7 @@
  * appeared on no board at all.
  */
 
-import { stopBoards, routeBoard, BOARD_MIN_SAMPLES, type BoardRow, type RouteRow } from './boards';
+import { stopBoards, routeBoard, routeBoardByHeadway, BOARD_MIN_SAMPLES, type BoardRow, type HeadwayRow, type RouteRow } from './boards';
 import type { DayMode, StopFeature } from './data';
 import type { FilterMode } from './map';
 import type { RouteFile } from './routes';
@@ -64,17 +64,44 @@ const routeRows = (list: RouteRow[], theme: Mode) =>
     })
     .join('');
 
-const board = (title: string, blurb: string, head: 'Line' | 'Stop', rows: string) =>
+/**
+ * H-B rows — deviation as a share of the line's headway. The percentage IS the
+ * sort key, so it leads the last column; the raw headway rides in the tooltip and
+ * as a muted suffix, because "80%" means nothing without "of what".
+ */
+const headwayRows = (list: HeadwayRow[], theme: Mode) =>
+  list
+    .map(
+      (r, i) => `<tr title="${escape(r.route.headsign)} — about every ${r.headway} min, typically ${describe(r.mean)}">
+        <td class="rank">${i + 1}</td>
+        <td>${escape(r.route.name)} → ${escape(r.route.headsign || 'terminus')}</td>
+        <td class="num"><span class="dot" style="background:${colorFor(r.mean, theme)}"></span>${describe(r.mean)}</td>
+        <td class="num">${Math.round(r.share * 100)}%<span class="unit"> of ${r.headway}′</span></td>
+      </tr>`,
+    )
+    .join('');
+
+/** One ranking card. `unit` names the last column — it differs per board. */
+const board = (title: string, blurb: string, head: 'Line' | 'Stop', unit: string, rows: string) =>
   !rows
     ? ''
     : `<section class="board">
-        <h3>${title}</h3>
+        <h4>${title}</h4>
         <p class="note">${blurb}</p>
         <div class="scroll">
-          <table><thead><tr><th></th><th>${head}</th><th class="num">Typical</th><th class="num">${head === 'Line' ? 'Every' : 'Dep'}</th></tr></thead>
+          <table><thead><tr><th></th><th>${head}</th><th class="num">Typical</th><th class="num">${unit}</th></tr></thead>
           <tbody>${rows}</tbody></table>
         </div>
       </section>`;
+
+/** A labelled band of cards — the rankings are grouped by what they rank. */
+const group = (label: string, blurb: string, gridClass: string, cards: string) =>
+  !cards.trim()
+    ? ''
+    : `<div class="rank-group">
+        <div class="rank-group-head"><h3>${label}</h3><p class="note">${blurb}</p></div>
+        <div class="rank-grid ${gridClass}">${cards}</div>
+      </div>`;
 
 export function tableView(
   features: StopFeature[],
@@ -86,28 +113,47 @@ export function tableView(
 ): string {
   const s = stopBoards(features, mode, hour);
   const lines = routes ? routeBoard(routes, mode, hour, filter) : [];
-  const when = `${hh(hour)}, ${mode === 'wd' ? 'weekdays' : 'weekends'}`;
+  const headway = routes ? routeBoardByHeadway(routes, mode, hour, filter) : [];
+  const day = mode === 'wd' ? 'weekdays' : 'weekends';
+  const when = `${hh(hour)}, ${day}`;
 
   if (!s.eligible) {
     return `<p class="note">Nothing is measured well enough to rank at ${when}. At night most stops have no service
       at all, which is not the same as no data.</p>`;
   }
 
-  return (
+  // Lines first: "is my line bad right now" is the question a rider actually
+  // arrives with, and the whole section is scoped to the one hour on the slider.
+  const lineCards =
     board(
-      `Lines furthest off schedule at ${hh(hour)}`,
-      'Ranked by how far from its timetable the whole line runs at this hour — early and late alike.',
+      'Furthest off schedule',
+      'How far from its timetable the whole line runs this hour — early and late alike.',
       'Line',
+      'Every',
       routeRows(lines.slice(0, 12), theme),
     ) +
-    board(`Running latest at ${hh(hour)}`, `Stops behind schedule at ${when}.`, 'Stop', stopRows(s.late, theme)) +
     board(
-      `Running earliest at ${hh(hour)}`,
-      `Stops ahead of schedule at ${when}. Whether that costs you the vehicle depends on if it waits — which this data cannot say.`,
+      'Headway you can’t trust',
+      'How much of the gap between vehicles the line is typically off by. Near 100%, the printed times can’t be planned around.',
+      'Line',
+      'Of gap',
+      headwayRows(headway.slice(0, 12), theme),
+    );
+
+  const stopCards =
+    board('Running latest', `Stops behind schedule at ${hh(hour)}.`, 'Stop', 'Dep', stopRows(s.late, theme)) +
+    board(
+      'Running earliest',
+      'Stops ahead of schedule. Whether that costs you the vehicle depends on if it waits — which this data cannot say.',
       'Stop',
+      'Dep',
       stopRows(s.early, theme),
     ) +
-    board(`Closest to schedule at ${hh(hour)}`, `The stops that simply work at ${when}, busiest first among equals.`, 'Stop', stopRows(s.punctual, theme)) +
+    board('Closest to schedule', 'The stops that simply work, busiest first among equals.', 'Stop', 'Dep', stopRows(s.punctual, theme));
+
+  return (
+    group(`Your line at ${hh(hour)}`, `The lines standing out at ${hh(hour)} on ${day} — the question you came with.`, 'rank-lines', lineCards) +
+    group(`Stops at ${hh(hour)}`, `Every stop below is measured at ${when}; nothing here is a whole-day average.`, 'rank-stops', stopCards) +
     `<p class="note tiny board-foot">Ranked across ${s.eligible.toLocaleString('en')} stations carrying at least
       ${BOARD_MIN_SAMPLES} observations in this hour. A mean built on fewer is not evidence — ranking without that
       floor is what once put a stop with two measured hours out of twenty-four at the top of this page.</p>`
